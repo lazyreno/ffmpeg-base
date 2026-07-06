@@ -151,6 +151,8 @@ foreach(workflow_marker IN ITEMS
     "vcpkg-configuration.json"
     "tests/\\*\\*"
     "actions/checkout@v5"
+    "actions/upload-artifact@v5"
+    "actions/download-artifact@v5"
     "Checkout pinned vcpkg"
     "bootstrap-vcpkg"
     "--vcpkg-root"
@@ -164,12 +166,15 @@ endforeach()
 require_not_contains("${workflow_content}" "build-macos:" "Workflow must not keep the old static macOS build job")
 require_not_contains("${workflow_content}" "build-windows:" "Workflow must not keep the old static Windows build job")
 require_not_contains("${workflow_content}" "actions/checkout@v4" "Workflow must not use Node 20 actions/checkout@v4")
+require_not_contains("${workflow_content}" "actions/upload-artifact@v4" "Workflow must not use Node 20 actions/upload-artifact@v4")
+require_not_contains("${workflow_content}" "actions/download-artifact@v4" "Workflow must not use Node 20 actions/download-artifact@v4")
 require_not_contains("${workflow_content}" "ilammy/msvc-dev-cmd" "Workflow must not use the deprecated Node-based MSVC setup action")
 require_not_contains("${workflow_content}" "(^|[ \t\r\n])vcpkg install" "Workflow must not invoke runner PATH vcpkg")
 require_not_contains("${workflow_content}" "--overlay-triplets" "Workflow must not use redundant custom vcpkg triplets")
 require_not_contains("${workflow_content}" "import hashlib" "Workflow must not inline artifact-index generation logic")
 require_not_contains("${workflow_content}" "brew --prefix" "Workflow must not discover production dependencies through Homebrew")
 require_not_contains("${workflow_content}" "brew install (aom|libvpx|mp3lame|opus|libvorbis|ffmpeg)" "Workflow must not install production codec dependencies through Homebrew")
+require_contains("${workflow_content}" "aws/homebrew-tap" "macOS x64 build must remove untrusted runner taps before invoking Homebrew")
 require_contains("${workflow_content}" "brew install nasm" "macOS x64 build must declare nasm as a CI build tool for vcpkg aom")
 require_contains("${workflow_content}" "github\\.event_name == 'workflow_dispatch' \\|\\| startsWith\\(github\\.ref, 'refs/tags/v'\\)" "Release publishing must only run for manual dispatch or v* tags")
 require_contains("${workflow_content}" "GITHUB_REF_NAME.*release_tag" "Tag-triggered releases must validate tag name against sdkVersion")
