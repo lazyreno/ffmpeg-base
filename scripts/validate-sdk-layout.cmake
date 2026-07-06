@@ -12,6 +12,10 @@ if(NOT DEFINED SDK_ARCH)
     set(SDK_ARCH "")
 endif()
 
+if(NOT DEFINED VCPKG_TRIPLET OR VCPKG_TRIPLET STREQUAL "")
+    message(FATAL_ERROR "VCPKG_TRIPLET is required")
+endif()
+
 function(require_path path description)
     if(NOT EXISTS "${path}")
         message(FATAL_ERROR "${description} is required but was not found: ${path}")
@@ -55,7 +59,7 @@ function(require_one_runtime_match pattern description)
     endif()
 endfunction()
 
-function(validate_windows_static_runtime)
+function(validate_windows_runtime)
     foreach(component IN ITEMS
             avcodec
             avdevice
@@ -66,16 +70,6 @@ function(validate_windows_static_runtime)
             swscale)
         require_path("${SDK_ROOT}/lib/${component}.lib" "${component}.lib")
         require_one_runtime_match("${component}*.dll" "${component} runtime DLL")
-    endforeach()
-
-    foreach(third_party_pattern IN ITEMS
-            "*mp3lame*.dll"
-            "*vpx*.dll"
-            "*aom*.dll"
-            "*opus*.dll"
-            "*vorbis*.dll"
-            "*ogg*.dll")
-        require_one_runtime_match("${third_party_pattern}" "third-party runtime DLL")
     endforeach()
 endfunction()
 
@@ -156,7 +150,7 @@ elseif(SDK_PLATFORM STREQUAL "windows")
         message(FATAL_ERROR "Windows SDK must copy runtime DLLs into bin for client local runs")
     endif()
 
-    validate_windows_static_runtime()
+    validate_windows_runtime()
 
     if(NOT SDK_ARCH STREQUAL "arm64")
         validate_runtime_tool("${SDK_ROOT}/bin/ffmpeg.exe" "ffmpeg.exe")
@@ -216,19 +210,13 @@ string(JSON expected_license_mode GET "${sdk_version_json}" licenseMode)
 string(JSON expected_source_url GET "${source_lock_json}" url)
 string(JSON expected_source_sha256 GET "${source_lock_json}" sha256)
 
-if(SDK_PLATFORM STREQUAL "macos")
-    set(expected_triplet "macos-${SDK_ARCH}")
-elseif(SDK_PLATFORM STREQUAL "windows")
-    set(expected_triplet "windows-${SDK_ARCH}-msvc")
-endif()
-
 require_manifest_equals("name" "ffmpeg-base")
 require_manifest_equals("sdkVersion" "${expected_sdk_version}")
 require_manifest_equals("ffmpegVersion" "${expected_ffmpeg_version}")
 require_manifest_equals("platform" "${SDK_PLATFORM}")
 require_manifest_equals("arch" "${SDK_ARCH}")
 require_manifest_equals("vcpkgBaseline" "${expected_vcpkg_baseline}")
-require_manifest_equals("vcpkgTriplet" "${expected_triplet}")
+require_manifest_equals("vcpkgTriplet" "${VCPKG_TRIPLET}")
 require_manifest_equals("ffmpegSourceUrl" "${expected_source_url}")
 require_manifest_equals("ffmpegSourceSha256" "${expected_source_sha256}")
 require_manifest_equals("licenseMode" "${expected_license_mode}")

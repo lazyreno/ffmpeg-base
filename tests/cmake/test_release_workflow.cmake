@@ -293,12 +293,15 @@ foreach(validation_marker IN ITEMS
     "sdkVersion"
     "ffmpegVersion"
     "vcpkgBaseline"
+    "VCPKG_TRIPLET"
     "ffmpegSourceSha256"
     "licenseMode"
     "NOT SDK_ARCH STREQUAL \"arm64\""
-    "validate_windows_static_runtime")
+    "validate_windows_runtime")
   require_contains("${validate_script_content}" "${validation_marker}" "SDK validation is missing marker: ${validation_marker}")
 endforeach()
+require_not_contains("${validate_script_content}" "windows-\\$\\{SDK_ARCH\\}-msvc" "SDK validation must not derive legacy custom Windows triplets")
+require_not_contains("${validate_script_content}" "macos-\\$\\{SDK_ARCH\\}" "SDK validation must not derive legacy custom macOS triplets")
 
 foreach(stage_marker IN ITEMS
     "install_name_tool"

@@ -206,6 +206,7 @@ cmake \
   -D SDK_ROOT="${SDK_ROOT}" \
   -D SDK_PLATFORM="macos" \
   -D SDK_ARCH="${SDK_ARCH}" \
+  -D VCPKG_TRIPLET="${VCPKG_TRIPLET}" \
   -P "${ROOT_DIR}/scripts/validate-sdk-layout.cmake"
 
 pushd "${SDK_PARENT_DIR}" >/dev/null

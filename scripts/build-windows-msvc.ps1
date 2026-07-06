@@ -273,6 +273,7 @@ cmake `
     -D "SDK_ROOT=$SdkRoot" `
     -D "SDK_PLATFORM=windows" `
     -D "SDK_ARCH=$SdkArch" `
+    -D "VCPKG_TRIPLET=$VcpkgTriplet" `
     -P "$RootDir/scripts/validate-sdk-layout.cmake"
 if ($LASTEXITCODE -ne 0) {
     throw "Windows SDK validation failed"
