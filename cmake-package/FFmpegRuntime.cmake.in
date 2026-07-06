@@ -1,0 +1,6 @@
+get_filename_component(FFmpeg_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+set(FFmpeg_RUNTIME_DIR "${FFmpeg_ROOT}/bin")
+set(FFmpeg_LICENSE_DIR "${FFmpeg_ROOT}/licenses")
+set(FFmpeg_MANIFEST_FILE "${FFmpeg_ROOT}/manifest.json")
+set(FFmpeg_FFMPEG_EXECUTABLE "${FFmpeg_RUNTIME_DIR}/ffmpeg@FFMPEG_EXECUTABLE_SUFFIX@")
+set(FFmpeg_FFPROBE_EXECUTABLE "${FFmpeg_RUNTIME_DIR}/ffprobe@FFMPEG_EXECUTABLE_SUFFIX@")

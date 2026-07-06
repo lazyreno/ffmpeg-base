@@ -1,0 +1,16 @@
+{
+  "name": "ffmpeg-base",
+  "sdkVersion": "@SDK_VERSION@",
+  "ffmpegVersion": "@FFMPEG_VERSION@",
+  "platform": "@SDK_PLATFORM@",
+  "arch": "@SDK_ARCH@",
+  "compiler": "@SDK_COMPILER@",
+  "vcpkgBaseline": "@VCPKG_BASELINE@",
+  "vcpkgTriplet": "@VCPKG_TRIPLET@",
+  "ffmpegSourceUrl": "@FFMPEG_SOURCE_URL@",
+  "ffmpegSourceSha256": "@FFMPEG_SOURCE_SHA256@",
+  "features": @SDK_FEATURES_JSON@,
+  "licenseMode": "@LICENSE_MODE@",
+  "buildId": "@BUILD_ID@",
+  "createdAt": "@CREATED_AT@"
+}

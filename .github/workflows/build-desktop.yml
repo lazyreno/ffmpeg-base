@@ -1,0 +1,225 @@
+name: Build Desktop FFmpeg SDK
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-desktop.yml"
+      - "cmake-package/**"
+      - "config/**"
+      - "scripts/**"
+      - "templates/**"
+      - "tests/**"
+      - "triplets/**"
+      - "vcpkg.json"
+      - "vcpkg-configuration.json"
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+    paths:
+      - ".github/workflows/build-desktop.yml"
+      - "cmake-package/**"
+      - "config/**"
+      - "scripts/**"
+      - "templates/**"
+      - "tests/**"
+      - "triplets/**"
+      - "vcpkg.json"
+      - "vcpkg-configuration.json"
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-matrix:
+    name: Prepare SDK Matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      sdk_version: ${{ steps.matrix.outputs.sdk_version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate production declarations
+        run: |
+          python3 -m json.tool config/sdk-version.json >/dev/null
+          python3 -m json.tool config/ffmpeg-profile.json >/dev/null
+          python3 -m json.tool config/platform-matrix.json >/dev/null
+          python3 -m json.tool config/source-lock.json >/dev/null
+          python3 -m json.tool vcpkg.json >/dev/null
+          python3 -m json.tool vcpkg-configuration.json >/dev/null
+          cmake -P tests/cmake/test_release_workflow.cmake
+
+      - name: Generate build matrix
+        id: matrix
+        run: python3 scripts/generate-github-matrix.py --github-output "$GITHUB_OUTPUT"
+
+  build-sdk:
+    name: ${{ matrix.key }} SDK
+    needs: prepare-matrix
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show macOS runner
+        if: matrix.buildFamily == 'macos'
+        run: |
+          sw_vers
+          uname -a
+          clang --version
+          cmake --version
+
+      - name: Setup MSYS2
+        if: matrix.buildFamily == 'windows-msvc'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          path-type: inherit
+          update: true
+          install: >-
+            base-devel
+            diffutils
+            make
+
+      - name: Setup MSVC
+        if: matrix.buildFamily == 'windows-msvc'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvcArch }}
+
+      - name: Show Windows runner
+        if: matrix.buildFamily == 'windows-msvc'
+        shell: pwsh
+        run: |
+          systeminfo | Select-String "OS Name", "OS Version", "System Type"
+          clang-cl --version | Select-Object -First 1
+          link 2>&1 | Select-Object -First 1
+          cmake --version
+          bash --version
+
+      - name: Install macOS LGPL codec dependencies
+        if: matrix.buildFamily == 'macos'
+        run: |
+          vcpkg install \
+            --triplet "${{ matrix.triplet }}" \
+            --overlay-triplets=triplets \
+            --x-install-root "${{ github.workspace }}/.vcpkg-installed" \
+            --clean-after-build
+
+      - name: Install Windows LGPL codec dependencies
+        if: matrix.buildFamily == 'windows-msvc'
+        shell: pwsh
+        run: |
+          vcpkg install `
+            --triplet "${{ matrix.triplet }}" `
+            --overlay-triplets=triplets `
+            --x-install-root "${{ github.workspace }}/.vcpkg-installed" `
+            --clean-after-build
+
+      - name: Build macOS SDK
+        if: matrix.buildFamily == 'macos'
+        env:
+          SDK_ARCH: ${{ matrix.arch }}
+          VCPKG_INSTALLED_DIR: ${{ github.workspace }}/.vcpkg-installed
+        run: scripts/build-macos.sh
+
+      - name: Build Windows SDK
+        if: matrix.buildFamily == 'windows-msvc'
+        shell: pwsh
+        env:
+          SDK_ARCH: ${{ matrix.arch }}
+          VCPKG_INSTALLED_DIR: ${{ github.workspace }}/.vcpkg-installed
+        run: scripts/build-windows-msvc.ps1
+
+      - name: Upload SDK archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-sdk-${{ matrix.key }}
+          path: |
+            dist/ffmpeg-sdk-*-${{ matrix.key }}.zip
+            dist/ffmpeg-sdk-*-${{ matrix.key }}.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-release:
+    name: Publish GitHub Release
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs:
+      - prepare-matrix
+      - build-sdk
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: ffmpeg-sdk-release-${{ needs.prepare-matrix.outputs.sdk_version }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SDK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ffmpeg-sdk-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sdk_version="${{ needs.prepare-matrix.outputs.sdk_version }}"
+          ffmpeg_version="$(python3 -c 'import json; print(json.load(open("config/sdk-version.json"))["ffmpegVersion"])')"
+          release_tag="v${sdk_version}"
+          release_title="FFmpeg SDK ${ffmpeg_version} v${sdk_version}"
+          release_base_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${release_tag}"
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != "${release_tag}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match SDK version ${release_tag}." >&2
+            exit 1
+          fi
+
+          if gh release view "${release_tag}" >/dev/null 2>&1; then
+            echo "Release ${release_tag} already exists. Publish a new sdkVersion instead of replacing it." >&2
+            exit 1
+          fi
+
+          python3 scripts/generate-artifact-index.py \
+            --release-assets release-assets \
+            --output release-assets/artifact-index.json \
+            --base-url "${release_base_url}" \
+            --release-tag "${release_tag}"
+
+          mapfile -t release_files < <(find release-assets -type f \( -name 'ffmpeg-sdk-*.zip' -o -name 'ffmpeg-sdk-*.zip.sha256' -o -name 'artifact-index.json' \) | sort)
+          if [[ "${#release_files[@]}" -eq 0 ]]; then
+            echo "No SDK release files were downloaded." >&2
+            exit 1
+          fi
+
+          release_args=(
+            gh release create "${release_tag}"
+            "${release_files[@]}"
+            --title "${release_title}"
+            --notes "Cloud-built FFmpeg SDK for desktop clients. This release is immutable; publish a new sdkVersion for rebuilds."
+          )
+
+          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+            release_args+=(--target "${GITHUB_SHA}")
+          fi
+
+          "${release_args[@]}"

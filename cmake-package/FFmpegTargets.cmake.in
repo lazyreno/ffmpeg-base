@@ -1,0 +1,11 @@
+get_filename_component(_ffmpeg_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+
+foreach(_component IN ITEMS @FFMPEG_SDK_COMPONENTS@)
+    if(NOT TARGET FFmpeg::${_component})
+        add_library(FFmpeg::${_component} UNKNOWN IMPORTED)
+        set_target_properties(FFmpeg::${_component} PROPERTIES
+            IMPORTED_LOCATION "${_ffmpeg_root}/lib/@FFMPEG_LIBRARY_PREFIX@${_component}@FFMPEG_LIBRARY_SUFFIX@"
+            INTERFACE_INCLUDE_DIRECTORIES "${_ffmpeg_root}/include"
+        )
+    endif()
+endforeach()

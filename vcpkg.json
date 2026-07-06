@@ -1,0 +1,11 @@
+{
+  "name": "ffmpeg-base-sdk-deps",
+  "version-string": "20260706.1",
+  "dependencies": [
+    "mp3lame",
+    "libvpx",
+    "aom",
+    "opus",
+    "libvorbis"
+  ]
+}

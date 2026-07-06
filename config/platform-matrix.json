@@ -1,0 +1,46 @@
+{
+  "platforms": [
+    {
+      "key": "macos-arm64",
+      "os": "macos",
+      "arch": "arm64",
+      "buildFamily": "macos",
+      "runner": "macos-14",
+      "triplet": "macos-arm64",
+      "archiveExt": "zip",
+      "enabled": true
+    },
+    {
+      "key": "macos-x86_64",
+      "os": "macos",
+      "arch": "x86_64",
+      "buildFamily": "macos",
+      "runner": "macos-15-intel",
+      "triplet": "macos-x86_64",
+      "archiveExt": "zip",
+      "enabled": true
+    },
+    {
+      "key": "windows-x86_64",
+      "os": "windows",
+      "arch": "x86_64",
+      "buildFamily": "windows-msvc",
+      "runner": "windows-2022",
+      "msvcArch": "amd64",
+      "triplet": "windows-x86_64-msvc",
+      "archiveExt": "zip",
+      "enabled": true
+    },
+    {
+      "key": "windows-arm64",
+      "os": "windows",
+      "arch": "arm64",
+      "buildFamily": "windows-msvc",
+      "runner": "windows-2022",
+      "msvcArch": "amd64_arm64",
+      "triplet": "windows-arm64-msvc",
+      "archiveExt": "zip",
+      "enabled": true
+    }
+  ]
+}

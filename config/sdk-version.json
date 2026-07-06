@@ -1,0 +1,8 @@
+{
+  "sdkVersion": "20260706.1",
+  "ffmpegVersion": "8.1.2",
+  "releaseChannel": "stable",
+  "licenseMode": "lgpl",
+  "featureProfile": "lgpl-desktop-app-v1",
+  "vcpkgBaseline": "8064d7df64700f074d3f572c8ea312bb64d306b7"
+}
