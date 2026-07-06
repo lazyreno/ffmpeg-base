@@ -125,17 +125,14 @@ foreach(platform_field IN ITEMS
 endforeach()
 require_contains("${platform_content}" "\"msvcArch\"" "Windows platform entries must declare msvcArch")
 
-foreach(triplet_name IN ITEMS
-    macos-arm64
-    macos-x64
-    windows-x64-msvc
-    windows-arm64-msvc)
-  if(NOT EXISTS "${repo_root}/triplets/${triplet_name}.cmake")
-    message(FATAL_ERROR "Missing vcpkg triplet file: triplets/${triplet_name}.cmake")
-  endif()
-endforeach()
-
 require_not_contains("${platform_content}" "\"triplet\"[ \t\r\n]*:[ \t\r\n]*\"[^\"]*_[^\"]*\"" "vcpkg triplet names must not contain underscores")
+foreach(builtin_triplet IN ITEMS
+    arm64-osx
+    x64-osx
+    x64-windows
+    arm64-windows)
+  require_contains("${platform_content}" "\"triplet\"[ \t\r\n]*:[ \t\r\n]*\"${builtin_triplet}\"" "Platform matrix must use built-in vcpkg triplet ${builtin_triplet}")
+endforeach()
 
 foreach(workflow_marker IN ITEMS
     "workflow_dispatch:"
@@ -152,13 +149,11 @@ foreach(workflow_marker IN ITEMS
     "contents: write"
     "vcpkg.json"
     "vcpkg-configuration.json"
-    "triplets/\\*\\*"
     "tests/\\*\\*"
     "actions/checkout@v5"
     "Checkout pinned vcpkg"
     "bootstrap-vcpkg"
     "--vcpkg-root"
-    "--overlay-triplets"
     "--x-install-root"
     "gh release view"
     "gh release create"
@@ -171,8 +166,11 @@ require_not_contains("${workflow_content}" "build-windows:" "Workflow must not k
 require_not_contains("${workflow_content}" "actions/checkout@v4" "Workflow must not use Node 20 actions/checkout@v4")
 require_not_contains("${workflow_content}" "ilammy/msvc-dev-cmd" "Workflow must not use the deprecated Node-based MSVC setup action")
 require_not_contains("${workflow_content}" "(^|[ \t\r\n])vcpkg install" "Workflow must not invoke runner PATH vcpkg")
+require_not_contains("${workflow_content}" "--overlay-triplets" "Workflow must not use redundant custom vcpkg triplets")
 require_not_contains("${workflow_content}" "import hashlib" "Workflow must not inline artifact-index generation logic")
-require_not_contains("${workflow_content}" "brew install|brew --prefix" "Workflow must not use Homebrew for production dependencies")
+require_not_contains("${workflow_content}" "brew --prefix" "Workflow must not discover production dependencies through Homebrew")
+require_not_contains("${workflow_content}" "brew install (aom|libvpx|mp3lame|opus|libvorbis|ffmpeg)" "Workflow must not install production codec dependencies through Homebrew")
+require_contains("${workflow_content}" "brew install nasm" "macOS x64 build must declare nasm as a CI build tool for vcpkg aom")
 require_contains("${workflow_content}" "github\\.event_name == 'workflow_dispatch' \\|\\| startsWith\\(github\\.ref, 'refs/tags/v'\\)" "Release publishing must only run for manual dispatch or v* tags")
 require_contains("${workflow_content}" "GITHUB_REF_NAME.*release_tag" "Tag-triggered releases must validate tag name against sdkVersion")
 
@@ -257,6 +255,8 @@ endforeach()
 
 require_contains("${macos_build_script_content}" "curl --fail --show-error --location --retry 3" "macOS source download must fail loudly and retry transient network errors")
 require_contains("${macos_build_script_content}" "VCPKG_TRIPLET" "macOS build must use the matrix-owned vcpkg triplet")
+require_not_contains("${macos_build_script_content}" "--overlay-triplets" "macOS build diagnostics must not reference removed custom triplets")
+require_not_contains("${macos_build_script_content}" "mapfile" "macOS build script must not require Bash 4 mapfile on GitHub macOS runners")
 require_contains("${macos_build_script_content}" "GIT_CEILING_DIRECTORIES" "macOS SDK build must prevent FFmpeg version.sh from reading ffmpeg-base git metadata")
 require_contains("${macos_build_script_content}" "--disable-x86asm" "macOS x86_64 build must not depend on unpinned nasm")
 require_not_contains("${macos_build_script_content}" "brew --prefix" "macOS build must not discover production dependencies through Homebrew")
@@ -265,8 +265,8 @@ require_contains("${windows_build_script_content}" "--toolchain=msvc" "Windows S
 require_contains("${windows_build_script_content}" "--cc=clang-cl" "Windows SDK build must use clang-cl with the MSVC ABI")
 require_contains("${windows_build_script_content}" "\\$FfmpegArch = \"x86_64\"" "Windows build must map x86_64 to FFmpeg x86_64")
 require_contains("${windows_build_script_content}" "\\$FfmpegArch = \"aarch64\"" "Windows build must map arm64 to FFmpeg aarch64")
-require_contains("${windows_build_script_content}" "\\$VcpkgTriplet = \"windows-x64-msvc\"" "Windows build must map x86_64 to repository vcpkg triplet")
-require_contains("${windows_build_script_content}" "\\$VcpkgTriplet = \"windows-arm64-msvc\"" "Windows build must map arm64 to repository vcpkg triplet")
+require_contains("${windows_build_script_content}" "\\$VcpkgTriplet = \"x64-windows\"" "Windows build must map x86_64 to built-in vcpkg triplet")
+require_contains("${windows_build_script_content}" "\\$VcpkgTriplet = \"arm64-windows\"" "Windows build must map arm64 to built-in vcpkg triplet")
 require_contains("${windows_build_script_content}" "MaximumRetryCount 3" "Windows source download must retry transient network errors")
 require_not_contains("${windows_build_script_content}" "VcpkgDependencyTriplet" "Windows build must not reference the removed VcpkgDependencyTriplet variable")
 

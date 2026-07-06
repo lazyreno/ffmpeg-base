@@ -6,7 +6,7 @@
       "arch": "arm64",
       "buildFamily": "macos",
       "runner": "macos-14",
-      "triplet": "macos-arm64",
+      "triplet": "arm64-osx",
       "archiveExt": "zip",
       "enabled": true
     },
@@ -16,7 +16,7 @@
       "arch": "x86_64",
       "buildFamily": "macos",
       "runner": "macos-15-intel",
-      "triplet": "macos-x64",
+      "triplet": "x64-osx",
       "archiveExt": "zip",
       "enabled": true
     },
@@ -27,7 +27,7 @@
       "buildFamily": "windows-msvc",
       "runner": "windows-2022",
       "msvcArch": "amd64",
-      "triplet": "windows-x64-msvc",
+      "triplet": "x64-windows",
       "archiveExt": "zip",
       "enabled": true
     },
@@ -38,7 +38,7 @@
       "buildFamily": "windows-msvc",
       "runner": "windows-2022",
       "msvcArch": "amd64_arm64",
-      "triplet": "windows-arm64-msvc",
+      "triplet": "arm64-windows",
       "archiveExt": "zip",
       "enabled": true
     }

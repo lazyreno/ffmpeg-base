@@ -11,14 +11,14 @@ switch ($SdkArch) {
         $FfmpegCrossCompileFlag = ""
         $FfmpegTargetCflags = ""
         $FfmpegAssemblyFlag = "--disable-x86asm"
-        $VcpkgTriplet = "windows-x64-msvc"
+        $VcpkgTriplet = "x64-windows"
     }
     "arm64" {
         $FfmpegArch = "aarch64"
         $FfmpegCrossCompileFlag = "--enable-cross-compile"
         $FfmpegTargetCflags = "--target=arm64-windows"
         $FfmpegAssemblyFlag = "--disable-asm"
-        $VcpkgTriplet = "windows-arm64-msvc"
+        $VcpkgTriplet = "arm64-windows"
     }
     default {
         throw "Unsupported Windows SDK architecture: $SdkArch"

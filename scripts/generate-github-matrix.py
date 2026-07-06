@@ -37,10 +37,6 @@ def validate_platform(platform):
             f"{platform['key']} triplet must use lowercase letters, digits, and hyphens: "
             f"{platform['triplet']}"
         )
-    triplet_file = REPO_ROOT / "triplets" / f"{platform['triplet']}.cmake"
-    if not triplet_file.exists():
-        raise SystemExit(f"{platform['key']} triplet file is missing: {triplet_file}")
-
 
 def main():
     parser = argparse.ArgumentParser(description="Generate the GitHub Actions SDK build matrix.")

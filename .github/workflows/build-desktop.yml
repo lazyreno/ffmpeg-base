@@ -170,6 +170,10 @@ jobs:
             exit $LASTEXITCODE
           }
 
+      - name: Install macOS x64 assembler tool
+        if: matrix.buildFamily == 'macos' && matrix.arch == 'x86_64'
+        run: brew install nasm
+
       - name: Show Windows runner
         if: matrix.buildFamily == 'windows-msvc'
         shell: pwsh
@@ -186,7 +190,6 @@ jobs:
           "${{ github.workspace }}/.vcpkg-root/vcpkg" install \
             --vcpkg-root "${{ github.workspace }}/.vcpkg-root" \
             --triplet "${{ matrix.triplet }}" \
-            --overlay-triplets="${{ github.workspace }}/triplets" \
             --x-install-root "${{ github.workspace }}/.vcpkg-installed" \
             --clean-after-build
 
@@ -198,7 +201,6 @@ jobs:
           & "$vcpkgRoot\vcpkg.exe" install `
             --vcpkg-root "$vcpkgRoot" `
             --triplet "${{ matrix.triplet }}" `
-            --overlay-triplets="${{ github.workspace }}\triplets" `
             --x-install-root "${{ github.workspace }}/.vcpkg-installed" `
             --clean-after-build
           if ($LASTEXITCODE -ne 0) {

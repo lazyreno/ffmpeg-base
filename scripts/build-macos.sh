@@ -53,7 +53,12 @@ SOURCE_LOCK_URL="$(python3 -c 'import json; print(json.load(open("config/source-
 SOURCE_LOCK_SHA256="$(python3 -c 'import json; print(json.load(open("config/source-lock.json"))["sha256"])' < /dev/null)"
 PROFILE_NAME="$(python3 -c 'import json; print(json.load(open("config/ffmpeg-profile.json"))["profile"])' < /dev/null)"
 PROFILE_LICENSE_MODE="$(python3 -c 'import json; print(json.load(open("config/ffmpeg-profile.json"))["licenseMode"])' < /dev/null)"
-mapfile -t PROFILE_CONFIGURE_FLAGS < <(python3 -c 'import json; profile=json.load(open("config/ffmpeg-profile.json")); print("\n".join(profile["configure"]["common"] + profile["configure"].get("macos", [])))' < /dev/null)
+PROFILE_CONFIGURE_FLAGS=()
+while IFS= read -r profile_configure_flag; do
+  if [[ -n "${profile_configure_flag}" ]]; then
+    PROFILE_CONFIGURE_FLAGS+=("${profile_configure_flag}")
+  fi
+done < <(python3 -c 'import json; profile=json.load(open("config/ffmpeg-profile.json")); print("\n".join(profile["configure"]["common"] + profile["configure"].get("macos", [])))' < /dev/null)
 
 if [[ "${PROFILE_NAME}" != "${FEATURE_PROFILE}" ]]; then
   echo "config/ffmpeg-profile.json profile ${PROFILE_NAME} does not match sdk-version featureProfile ${FEATURE_PROFILE}." >&2
@@ -99,7 +104,7 @@ dependency_prefix() {
   fi
   if [[ -z "${value}" || ! -f "${value}/${header}" || ! -d "${value}/lib" ]]; then
     echo "${package_name} headers and libraries are required for the desktop LGPL app SDK profile." >&2
-    echo "Run vcpkg install --triplet ${VCPKG_TRIPLET} --overlay-triplets=triplets, or set ${env_name} to a prefix containing ${header} and lib/." >&2
+    echo "Run vcpkg install --triplet ${VCPKG_TRIPLET}, or set ${env_name} to a prefix containing ${header} and lib/." >&2
     exit 1
   fi
   printf '%s\n' "${value}"
