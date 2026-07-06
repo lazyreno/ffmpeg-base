@@ -151,8 +151,8 @@ foreach(workflow_marker IN ITEMS
     "vcpkg-configuration.json"
     "tests/\\*\\*"
     "actions/checkout@v5"
-    "actions/upload-artifact@v5"
-    "actions/download-artifact@v5"
+    "actions/upload-artifact@v7"
+    "actions/download-artifact@v8"
     "Checkout pinned vcpkg"
     "bootstrap-vcpkg"
     "--vcpkg-root"
@@ -167,7 +167,9 @@ require_not_contains("${workflow_content}" "build-macos:" "Workflow must not kee
 require_not_contains("${workflow_content}" "build-windows:" "Workflow must not keep the old static Windows build job")
 require_not_contains("${workflow_content}" "actions/checkout@v4" "Workflow must not use Node 20 actions/checkout@v4")
 require_not_contains("${workflow_content}" "actions/upload-artifact@v4" "Workflow must not use Node 20 actions/upload-artifact@v4")
+require_not_contains("${workflow_content}" "actions/upload-artifact@v5" "Workflow must not use Node 20 actions/upload-artifact@v5")
 require_not_contains("${workflow_content}" "actions/download-artifact@v4" "Workflow must not use Node 20 actions/download-artifact@v4")
+require_not_contains("${workflow_content}" "actions/download-artifact@v5" "Workflow must not use Node 20 actions/download-artifact@v5")
 require_not_contains("${workflow_content}" "ilammy/msvc-dev-cmd" "Workflow must not use the deprecated Node-based MSVC setup action")
 require_not_contains("${workflow_content}" "(^|[ \t\r\n])vcpkg install" "Workflow must not invoke runner PATH vcpkg")
 require_not_contains("${workflow_content}" "--overlay-triplets" "Workflow must not use redundant custom vcpkg triplets")
