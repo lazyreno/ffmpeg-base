@@ -11,7 +11,7 @@ switch ($SdkArch) {
         $FfmpegCrossCompileFlag = ""
         $FfmpegTargetCflags = ""
         $FfmpegAssemblyFlag = "--disable-x86asm"
-        $VcpkgTriplet = "windows-x86_64-msvc"
+        $VcpkgTriplet = "windows-x64-msvc"
     }
     "arm64" {
         $FfmpegArch = "aarch64"

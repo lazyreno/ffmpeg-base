@@ -25,6 +25,21 @@ if [[ "${HOST_ARCH}" != "${SDK_ARCH}" ]]; then
 fi
 
 PLATFORM_KEY="macos-${SDK_ARCH}"
+VCPKG_TRIPLET="$(python3 - "${PLATFORM_KEY}" <<'PY'
+import json
+import sys
+
+platform_key = sys.argv[1]
+with open("config/platform-matrix.json", "r", encoding="utf-8") as handle:
+    matrix = json.load(handle)
+for platform in matrix["platforms"]:
+    if platform["key"] == platform_key:
+        print(platform["triplet"])
+        break
+else:
+    raise SystemExit(f"Missing platform matrix entry for {platform_key}")
+PY
+)"
 BUILD_ROOT="${BUILD_ROOT:-${ROOT_DIR}/build/${PLATFORM_KEY}}"
 DIST_DIR="${DIST_DIR:-${ROOT_DIR}/dist}"
 SDK_VERSION="$(python3 -c 'import json; print(json.load(open("config/sdk-version.json"))["sdkVersion"])' < /dev/null)"
@@ -65,9 +80,9 @@ MACOS_MIN_VERSION="${MACOS_MIN_VERSION:-11.0}"
 
 VCPKG_ROOT="${VCPKG_ROOT:-${VCPKG_INSTALLATION_ROOT:-}}"
 if [[ -n "${VCPKG_INSTALLED_DIR:-}" ]]; then
-  VCPKG_DEPENDENCY_ROOT="${VCPKG_INSTALLED_DIR}/${PLATFORM_KEY}"
+  VCPKG_DEPENDENCY_ROOT="${VCPKG_INSTALLED_DIR}/${VCPKG_TRIPLET}"
 elif [[ -n "${VCPKG_ROOT}" ]]; then
-  VCPKG_DEPENDENCY_ROOT="${VCPKG_ROOT}/installed/${PLATFORM_KEY}"
+  VCPKG_DEPENDENCY_ROOT="${VCPKG_ROOT}/installed/${VCPKG_TRIPLET}"
 else
   echo "VCPKG_INSTALLED_DIR or VCPKG_ROOT is required for macOS SDK dependency lookup." >&2
   exit 1
@@ -84,7 +99,7 @@ dependency_prefix() {
   fi
   if [[ -z "${value}" || ! -f "${value}/${header}" || ! -d "${value}/lib" ]]; then
     echo "${package_name} headers and libraries are required for the desktop LGPL app SDK profile." >&2
-    echo "Run vcpkg install --triplet ${PLATFORM_KEY} --overlay-triplets=triplets, or set ${env_name} to a prefix containing ${header} and lib/." >&2
+    echo "Run vcpkg install --triplet ${VCPKG_TRIPLET} --overlay-triplets=triplets, or set ${env_name} to a prefix containing ${header} and lib/." >&2
     exit 1
   fi
   printf '%s\n' "${value}"
@@ -173,7 +188,7 @@ cmake \
   -D SDK_ARCH="${SDK_ARCH}" \
   -D SDK_COMPILER="$(clang --version | head -n 1)" \
   -D VCPKG_BASELINE="${VCPKG_BASELINE}" \
-  -D VCPKG_TRIPLET="${PLATFORM_KEY}" \
+  -D VCPKG_TRIPLET="${VCPKG_TRIPLET}" \
   -D FFMPEG_SOURCE_URL="${SOURCE_LOCK_URL}" \
   -D FFMPEG_SOURCE_SHA256="${SOURCE_LOCK_SHA256}" \
   -D SDK_FEATURES_JSON="${FEATURES_JSON}" \

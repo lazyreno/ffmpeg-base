@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import re
 from pathlib import Path
 
 
@@ -15,6 +16,7 @@ REQUIRED_PLATFORM_KEYS = {
     "archiveExt",
     "enabled",
 }
+TRIPLET_PATTERN = re.compile(r"^[a-z0-9-]+$")
 
 
 def load_json(path):
@@ -30,6 +32,14 @@ def validate_platform(platform):
         raise SystemExit(f"{platform['key']} has unsupported buildFamily: {platform['buildFamily']}")
     if platform["buildFamily"] == "windows-msvc" and not platform.get("msvcArch"):
         raise SystemExit(f"{platform['key']} must declare msvcArch")
+    if not TRIPLET_PATTERN.fullmatch(platform["triplet"]):
+        raise SystemExit(
+            f"{platform['key']} triplet must use lowercase letters, digits, and hyphens: "
+            f"{platform['triplet']}"
+        )
+    triplet_file = REPO_ROOT / "triplets" / f"{platform['triplet']}.cmake"
+    if not triplet_file.exists():
+        raise SystemExit(f"{platform['key']} triplet file is missing: {triplet_file}")
 
 
 def main():
@@ -38,6 +48,7 @@ def main():
     args = parser.parse_args()
 
     sdk = load_json(REPO_ROOT / "config" / "sdk-version.json")
+    vcpkg_lock = load_json(REPO_ROOT / "config" / "vcpkg-lock.json")
     matrix_config = load_json(REPO_ROOT / "config" / "platform-matrix.json")
     enabled_platforms = []
 
@@ -52,11 +63,16 @@ def main():
     matrix = {"include": enabled_platforms}
     matrix_json = json.dumps(matrix, separators=(",", ":"), sort_keys=True)
     sdk_version = sdk["sdkVersion"]
+    vcpkg_commit = vcpkg_lock["commit"]
+
+    if sdk["vcpkgBaseline"] != vcpkg_commit:
+        raise SystemExit("sdk-version.json vcpkgBaseline must match config/vcpkg-lock.json commit")
 
     if args.github_output:
         with args.github_output.open("a", encoding="utf-8") as handle:
             handle.write(f"matrix={matrix_json}\n")
             handle.write(f"sdk_version={sdk_version}\n")
+            handle.write(f"vcpkg_commit={vcpkg_commit}\n")
     else:
         print(matrix_json)
 

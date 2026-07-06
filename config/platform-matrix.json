@@ -16,7 +16,7 @@
       "arch": "x86_64",
       "buildFamily": "macos",
       "runner": "macos-15-intel",
-      "triplet": "macos-x86_64",
+      "triplet": "macos-x64",
       "archiveExt": "zip",
       "enabled": true
     },
@@ -27,7 +27,7 @@
       "buildFamily": "windows-msvc",
       "runner": "windows-2022",
       "msvcArch": "amd64",
-      "triplet": "windows-x86_64-msvc",
+      "triplet": "windows-x64-msvc",
       "archiveExt": "zip",
       "enabled": true
     },

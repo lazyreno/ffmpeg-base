@@ -6,6 +6,7 @@ set(version_file "${repo_root}/config/sdk-version.json")
 set(profile_file "${repo_root}/config/ffmpeg-profile.json")
 set(platform_file "${repo_root}/config/platform-matrix.json")
 set(source_lock_file "${repo_root}/config/source-lock.json")
+set(vcpkg_lock_file "${repo_root}/config/vcpkg-lock.json")
 set(vcpkg_manifest "${repo_root}/vcpkg.json")
 set(vcpkg_configuration "${repo_root}/vcpkg-configuration.json")
 set(matrix_script "${repo_root}/scripts/generate-github-matrix.py")
@@ -23,6 +24,7 @@ foreach(required_file IN ITEMS
     "${profile_file}"
     "${platform_file}"
     "${source_lock_file}"
+    "${vcpkg_lock_file}"
     "${vcpkg_manifest}"
     "${vcpkg_configuration}"
     "${matrix_script}"
@@ -43,6 +45,7 @@ file(READ "${version_file}" version_content)
 file(READ "${profile_file}" profile_content)
 file(READ "${platform_file}" platform_content)
 file(READ "${source_lock_file}" source_lock_content)
+file(READ "${vcpkg_lock_file}" vcpkg_lock_content)
 file(READ "${vcpkg_manifest}" vcpkg_manifest_content)
 file(READ "${vcpkg_configuration}" vcpkg_configuration_content)
 file(READ "${matrix_script}" matrix_script_content)
@@ -73,6 +76,8 @@ string(JSON feature_profile GET "${version_content}" featureProfile)
 string(JSON profile_name GET "${profile_content}" profile)
 string(JSON profile_license GET "${profile_content}" licenseMode)
 string(JSON source_lock_sha256 GET "${source_lock_content}" sha256)
+string(JSON vcpkg_lock_repository GET "${vcpkg_lock_content}" repository)
+string(JSON vcpkg_lock_commit GET "${vcpkg_lock_content}" commit)
 
 if(NOT sdk_version STREQUAL "20260706.1")
   message(FATAL_ERROR "SDK version must stay on the first rebuilt repository release batch 20260706.1")
@@ -90,6 +95,14 @@ string(LENGTH "${source_lock_sha256}" source_lock_sha256_length)
 if(NOT source_lock_sha256_length EQUAL 64 OR NOT source_lock_sha256 MATCHES "^[0-9a-f]+$")
   message(FATAL_ERROR "Source lock must record a lowercase SHA256 for the upstream FFmpeg source archive")
 endif()
+if(NOT vcpkg_lock_repository STREQUAL "https://github.com/microsoft/vcpkg.git")
+  message(FATAL_ERROR "vcpkg lock must pin the official Microsoft vcpkg repository")
+endif()
+if(NOT vcpkg_lock_commit STREQUAL "1b31135aadd41bfd2c9e76d06b5f815e54a0adea")
+  message(FATAL_ERROR "vcpkg lock must pin the verified vcpkg registry commit")
+endif()
+require_contains("${version_content}" "${vcpkg_lock_commit}" "sdk-version.json vcpkgBaseline must match vcpkg lock commit")
+require_contains("${vcpkg_configuration_content}" "${vcpkg_lock_commit}" "vcpkg configuration baseline must match vcpkg lock commit")
 
 require_not_contains("${version_content}" "\"defaultFeatures\"" "sdk-version.json must not own FFmpeg feature lists")
 require_not_contains("${version_content}" "\"platformFeatureExtras\"" "sdk-version.json must not own platform FFmpeg feature extras")
@@ -114,13 +127,15 @@ require_contains("${platform_content}" "\"msvcArch\"" "Windows platform entries 
 
 foreach(triplet_name IN ITEMS
     macos-arm64
-    macos-x86_64
-    windows-x86_64-msvc
+    macos-x64
+    windows-x64-msvc
     windows-arm64-msvc)
   if(NOT EXISTS "${repo_root}/triplets/${triplet_name}.cmake")
     message(FATAL_ERROR "Missing vcpkg triplet file: triplets/${triplet_name}.cmake")
   endif()
 endforeach()
+
+require_not_contains("${platform_content}" "\"triplet\"[ \t\r\n]*:[ \t\r\n]*\"[^\"]*_[^\"]*\"" "vcpkg triplet names must not contain underscores")
 
 foreach(workflow_marker IN ITEMS
     "workflow_dispatch:"
@@ -128,6 +143,8 @@ foreach(workflow_marker IN ITEMS
     "prepare-matrix:"
     "build-sdk:"
     "fromJson\\(needs\\.prepare-matrix\\.outputs\\.matrix\\)"
+    "vcpkg_commit"
+    "config/vcpkg-lock.json"
     "scripts/generate-github-matrix.py"
     "scripts/generate-artifact-index.py"
     "ffmpeg-sdk-release-\\$\\{\\{ needs\\.prepare-matrix\\.outputs\\.sdk_version \\}\\}"
@@ -137,7 +154,11 @@ foreach(workflow_marker IN ITEMS
     "vcpkg-configuration.json"
     "triplets/\\*\\*"
     "tests/\\*\\*"
-    "--overlay-triplets=triplets"
+    "actions/checkout@v5"
+    "Checkout pinned vcpkg"
+    "bootstrap-vcpkg"
+    "--vcpkg-root"
+    "--overlay-triplets"
     "--x-install-root"
     "gh release view"
     "gh release create"
@@ -147,6 +168,9 @@ endforeach()
 
 require_not_contains("${workflow_content}" "build-macos:" "Workflow must not keep the old static macOS build job")
 require_not_contains("${workflow_content}" "build-windows:" "Workflow must not keep the old static Windows build job")
+require_not_contains("${workflow_content}" "actions/checkout@v4" "Workflow must not use Node 20 actions/checkout@v4")
+require_not_contains("${workflow_content}" "ilammy/msvc-dev-cmd" "Workflow must not use the deprecated Node-based MSVC setup action")
+require_not_contains("${workflow_content}" "(^|[ \t\r\n])vcpkg install" "Workflow must not invoke runner PATH vcpkg")
 require_not_contains("${workflow_content}" "import hashlib" "Workflow must not inline artifact-index generation logic")
 require_not_contains("${workflow_content}" "brew install|brew --prefix" "Workflow must not use Homebrew for production dependencies")
 require_contains("${workflow_content}" "github\\.event_name == 'workflow_dispatch' \\|\\| startsWith\\(github\\.ref, 'refs/tags/v'\\)" "Release publishing must only run for manual dispatch or v* tags")
@@ -155,10 +179,13 @@ require_contains("${workflow_content}" "GITHUB_REF_NAME.*release_tag" "Tag-trigg
 foreach(matrix_script_marker IN ITEMS
     "platform-matrix.json"
     "sdk-version.json"
+    "vcpkg-lock.json"
     "buildFamily"
     "runner"
     "msvcArch"
+    "TRIPLET_PATTERN"
     "github-output"
+    "vcpkg_commit"
     "\"include\"")
   require_contains("${matrix_script_content}" "${matrix_script_marker}" "Matrix script is missing marker: ${matrix_script_marker}")
 endforeach()
@@ -186,7 +213,6 @@ endforeach()
 foreach(vcpkg_package IN ITEMS mp3lame libvpx aom opus libvorbis)
   require_contains("${vcpkg_manifest_content}" "\"${vcpkg_package}\"" "vcpkg manifest must declare ${vcpkg_package}")
 endforeach()
-require_contains("${vcpkg_configuration_content}" "8064d7df64700f074d3f572c8ea312bb64d306b7" "vcpkg configuration must pin the expected builtin baseline")
 
 foreach(profile_flag IN ITEMS
     "--disable-autodetect"
@@ -230,6 +256,7 @@ foreach(script_content IN ITEMS "${macos_build_script_content}" "${windows_build
 endforeach()
 
 require_contains("${macos_build_script_content}" "curl --fail --show-error --location --retry 3" "macOS source download must fail loudly and retry transient network errors")
+require_contains("${macos_build_script_content}" "VCPKG_TRIPLET" "macOS build must use the matrix-owned vcpkg triplet")
 require_contains("${macos_build_script_content}" "GIT_CEILING_DIRECTORIES" "macOS SDK build must prevent FFmpeg version.sh from reading ffmpeg-base git metadata")
 require_contains("${macos_build_script_content}" "--disable-x86asm" "macOS x86_64 build must not depend on unpinned nasm")
 require_not_contains("${macos_build_script_content}" "brew --prefix" "macOS build must not discover production dependencies through Homebrew")
@@ -238,7 +265,7 @@ require_contains("${windows_build_script_content}" "--toolchain=msvc" "Windows S
 require_contains("${windows_build_script_content}" "--cc=clang-cl" "Windows SDK build must use clang-cl with the MSVC ABI")
 require_contains("${windows_build_script_content}" "\\$FfmpegArch = \"x86_64\"" "Windows build must map x86_64 to FFmpeg x86_64")
 require_contains("${windows_build_script_content}" "\\$FfmpegArch = \"aarch64\"" "Windows build must map arm64 to FFmpeg aarch64")
-require_contains("${windows_build_script_content}" "\\$VcpkgTriplet = \"windows-x86_64-msvc\"" "Windows build must map x86_64 to repository vcpkg triplet")
+require_contains("${windows_build_script_content}" "\\$VcpkgTriplet = \"windows-x64-msvc\"" "Windows build must map x86_64 to repository vcpkg triplet")
 require_contains("${windows_build_script_content}" "\\$VcpkgTriplet = \"windows-arm64-msvc\"" "Windows build must map arm64 to repository vcpkg triplet")
 require_contains("${windows_build_script_content}" "MaximumRetryCount 3" "Windows source download must retry transient network errors")
 require_not_contains("${windows_build_script_content}" "VcpkgDependencyTriplet" "Windows build must not reference the removed VcpkgDependencyTriplet variable")

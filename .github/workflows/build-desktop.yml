@@ -42,10 +42,11 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       sdk_version: ${{ steps.matrix.outputs.sdk_version }}
+      vcpkg_commit: ${{ steps.matrix.outputs.vcpkg_commit }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate production declarations
         run: |
@@ -53,6 +54,7 @@ jobs:
           python3 -m json.tool config/ffmpeg-profile.json >/dev/null
           python3 -m json.tool config/platform-matrix.json >/dev/null
           python3 -m json.tool config/source-lock.json >/dev/null
+          python3 -m json.tool config/vcpkg-lock.json >/dev/null
           python3 -m json.tool vcpkg.json >/dev/null
           python3 -m json.tool vcpkg-configuration.json >/dev/null
           cmake -P tests/cmake/test_release_workflow.cmake
@@ -72,7 +74,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
+      - name: Checkout pinned vcpkg
+        uses: actions/checkout@v5
+        with:
+          repository: microsoft/vcpkg
+          ref: ${{ needs.prepare-matrix.outputs.vcpkg_commit }}
+          path: .vcpkg-root
 
       - name: Show macOS runner
         if: matrix.buildFamily == 'macos'
@@ -96,9 +105,70 @@ jobs:
 
       - name: Setup MSVC
         if: matrix.buildFamily == 'windows-msvc'
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: ${{ matrix.msvcArch }}
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsInstall = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vsInstall) {
+            throw "Visual Studio with MSVC tools was not found."
+          }
+
+          $vcvars = Join-Path $vsInstall "VC\Auxiliary\Build\vcvarsall.bat"
+          if (!(Test-Path $vcvars)) {
+            throw "vcvarsall.bat was not found: $vcvars"
+          }
+
+          $arch = "${{ matrix.msvcArch }}"
+          $envLines = cmd /s /c "`"$vcvars`" $arch && set"
+          $exportNames = @(
+            "CommandPromptType",
+            "DevEnvDir",
+            "EXTERNAL_INCLUDE",
+            "FrameworkDir",
+            "FrameworkDir64",
+            "FrameworkVersion",
+            "FrameworkVersion64",
+            "INCLUDE",
+            "LIB",
+            "LIBPATH",
+            "NETFXSDKDir",
+            "Path",
+            "Platform",
+            "UCRTVersion",
+            "UniversalCRTSdkDir",
+            "VCIDEInstallDir",
+            "VCINSTALLDIR",
+            "VCToolsInstallDir",
+            "VCToolsRedistDir",
+            "VCToolsVersion",
+            "VisualStudioVersion",
+            "VSINSTALLDIR",
+            "WindowsLibPath",
+            "WindowsSdkBinPath",
+            "WindowsSdkDir",
+            "WindowsSDKLibVersion",
+            "WindowsSdkVerBinPath",
+            "WindowsSDKVersion"
+          )
+          foreach ($line in $envLines) {
+            $parts = $line -split "=", 2
+            if ($parts.Count -eq 2 -and $exportNames -contains $parts[0]) {
+              "$($parts[0])=$($parts[1])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            }
+          }
+
+      - name: Bootstrap pinned vcpkg on macOS
+        if: matrix.buildFamily == 'macos'
+        run: ./.vcpkg-root/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Bootstrap pinned vcpkg on Windows
+        if: matrix.buildFamily == 'windows-msvc'
+        shell: pwsh
+        run: |
+          & "${{ github.workspace }}\.vcpkg-root\bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
       - name: Show Windows runner
         if: matrix.buildFamily == 'windows-msvc'
@@ -113,9 +183,10 @@ jobs:
       - name: Install macOS LGPL codec dependencies
         if: matrix.buildFamily == 'macos'
         run: |
-          vcpkg install \
+          "${{ github.workspace }}/.vcpkg-root/vcpkg" install \
+            --vcpkg-root "${{ github.workspace }}/.vcpkg-root" \
             --triplet "${{ matrix.triplet }}" \
-            --overlay-triplets=triplets \
+            --overlay-triplets="${{ github.workspace }}/triplets" \
             --x-install-root "${{ github.workspace }}/.vcpkg-installed" \
             --clean-after-build
 
@@ -123,16 +194,22 @@ jobs:
         if: matrix.buildFamily == 'windows-msvc'
         shell: pwsh
         run: |
-          vcpkg install `
+          $vcpkgRoot = "${{ github.workspace }}\.vcpkg-root"
+          & "$vcpkgRoot\vcpkg.exe" install `
+            --vcpkg-root "$vcpkgRoot" `
             --triplet "${{ matrix.triplet }}" `
-            --overlay-triplets=triplets `
+            --overlay-triplets="${{ github.workspace }}\triplets" `
             --x-install-root "${{ github.workspace }}/.vcpkg-installed" `
             --clean-after-build
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
       - name: Build macOS SDK
         if: matrix.buildFamily == 'macos'
         env:
           SDK_ARCH: ${{ matrix.arch }}
+          VCPKG_ROOT: ${{ github.workspace }}/.vcpkg-root
           VCPKG_INSTALLED_DIR: ${{ github.workspace }}/.vcpkg-installed
         run: scripts/build-macos.sh
 
@@ -141,6 +218,7 @@ jobs:
         shell: pwsh
         env:
           SDK_ARCH: ${{ matrix.arch }}
+          VCPKG_ROOT: ${{ github.workspace }}\.vcpkg-root
           VCPKG_INSTALLED_DIR: ${{ github.workspace }}/.vcpkg-installed
         run: scripts/build-windows-msvc.ps1
 
@@ -170,7 +248,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download SDK artifacts
         uses: actions/download-artifact@v4
