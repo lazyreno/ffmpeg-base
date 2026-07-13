@@ -69,3 +69,6 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# Local agent planning documents
+docs/superpowers/
