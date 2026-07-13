@@ -206,6 +206,9 @@ $FfmpegProfileConfigureArgs
   cat ffbuild/config.log >&2 || true
   exit 1
 fi
+cmake \
+  -D SOURCE_DIR='$MsysSourceDir' \
+  -P '$MsysRootDir/scripts/validate-ffmpeg-components.cmake'
 make -j`$(nproc)
 find . -name '*.d' -delete
 make install

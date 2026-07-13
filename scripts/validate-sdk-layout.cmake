@@ -52,6 +52,27 @@ function(validate_runtime_tool tool_path tool_name)
     endif()
 endfunction()
 
+function(validate_runtime_muxer tool_path muxer_name)
+    execute_process(
+        COMMAND "${tool_path}" -hide_banner -muxers
+        RESULT_VARIABLE muxer_result
+        OUTPUT_VARIABLE muxer_output
+        ERROR_VARIABLE muxer_error
+    )
+    set(muxer_diagnostics "${muxer_output}\n${muxer_error}")
+    if(NOT muxer_result EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to inspect staged FFmpeg muxers for ${muxer_name}:\n"
+            "${muxer_diagnostics}")
+    endif()
+
+    if(NOT muxer_diagnostics MATCHES "(^|\n)[ \t]*E[ \t]+${muxer_name}[ \t]+")
+        message(FATAL_ERROR
+            "Staged FFmpeg does not expose the required ${muxer_name} muxer:\n"
+            "${muxer_diagnostics}")
+    endif()
+endfunction()
+
 function(require_one_runtime_match pattern description)
     file(GLOB matching_runtime_files "${SDK_ROOT}/bin/${pattern}")
     if(NOT matching_runtime_files)
@@ -141,6 +162,7 @@ if(SDK_PLATFORM STREQUAL "macos")
 
     validate_runtime_tool("${SDK_ROOT}/bin/ffmpeg" "ffmpeg")
     validate_runtime_tool("${SDK_ROOT}/bin/ffprobe" "ffprobe")
+    validate_runtime_muxer("${SDK_ROOT}/bin/ffmpeg" "f32le")
 elseif(SDK_PLATFORM STREQUAL "windows")
     require_path("${SDK_ROOT}/bin/ffmpeg.exe" "ffmpeg.exe")
     require_path("${SDK_ROOT}/bin/ffprobe.exe" "ffprobe.exe")
@@ -155,6 +177,7 @@ elseif(SDK_PLATFORM STREQUAL "windows")
     if(NOT SDK_ARCH STREQUAL "arm64")
         validate_runtime_tool("${SDK_ROOT}/bin/ffmpeg.exe" "ffmpeg.exe")
         validate_runtime_tool("${SDK_ROOT}/bin/ffprobe.exe" "ffprobe.exe")
+        validate_runtime_muxer("${SDK_ROOT}/bin/ffmpeg.exe" "f32le")
     endif()
 else()
     message(FATAL_ERROR "Unsupported SDK_PLATFORM: ${SDK_PLATFORM}")

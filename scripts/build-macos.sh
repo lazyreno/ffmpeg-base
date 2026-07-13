@@ -173,6 +173,10 @@ fi
 pushd "${SOURCE_DIR}" >/dev/null
 ./configure "${configure_flags[@]}"
 
+cmake \
+  -D SOURCE_DIR="${SOURCE_DIR}" \
+  -P "${ROOT_DIR}/scripts/validate-ffmpeg-components.cmake"
+
 make -j"$(sysctl -n hw.ncpu)"
 make install
 popd >/dev/null

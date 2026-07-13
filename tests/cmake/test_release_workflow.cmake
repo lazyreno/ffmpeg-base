@@ -15,6 +15,7 @@ set(macos_build_script "${repo_root}/scripts/build-macos.sh")
 set(windows_build_script "${repo_root}/scripts/build-windows-msvc.ps1")
 set(stage_script "${repo_root}/scripts/stage-sdk.sh")
 set(validate_script "${repo_root}/scripts/validate-sdk-layout.cmake")
+set(configure_component_validator "${repo_root}/scripts/validate-ffmpeg-components.cmake")
 set(generate_manifest_script "${repo_root}/scripts/generate-manifest.cmake")
 set(manifest_template "${repo_root}/templates/manifest.json.in")
 
@@ -33,6 +34,7 @@ foreach(required_file IN ITEMS
     "${windows_build_script}"
     "${stage_script}"
     "${validate_script}"
+    "${configure_component_validator}"
     "${generate_manifest_script}"
     "${manifest_template}")
   if(NOT EXISTS "${required_file}")
@@ -54,6 +56,7 @@ file(READ "${macos_build_script}" macos_build_script_content)
 file(READ "${windows_build_script}" windows_build_script_content)
 file(READ "${stage_script}" stage_script_content)
 file(READ "${validate_script}" validate_script_content)
+file(READ "${configure_component_validator}" configure_component_validator_content)
 file(READ "${generate_manifest_script}" generate_manifest_script_content)
 file(READ "${manifest_template}" manifest_template_content)
 
@@ -79,8 +82,8 @@ string(JSON source_lock_sha256 GET "${source_lock_content}" sha256)
 string(JSON vcpkg_lock_repository GET "${vcpkg_lock_content}" repository)
 string(JSON vcpkg_lock_commit GET "${vcpkg_lock_content}" commit)
 
-if(NOT sdk_version STREQUAL "20260706.1")
-  message(FATAL_ERROR "SDK version must stay on the first rebuilt repository release batch 20260706.1")
+if(NOT sdk_version STREQUAL "20260713.1")
+  message(FATAL_ERROR "SDK version must identify the f32le muxer correction batch 20260713.1")
 endif()
 if(NOT ffmpeg_version STREQUAL "8.1.2")
   message(FATAL_ERROR "SDK must lock FFmpeg 8.1.2 until a deliberate version bump")
@@ -229,6 +232,7 @@ foreach(profile_flag IN ITEMS
     "--enable-libopus"
     "--enable-libvorbis"
     "--enable-demuxer=mov"
+    "--enable-muxer=pcm_f32le"
     "--enable-muxer=mp4"
     "--enable-decoder=h264"
     "--enable-parser=h264"
@@ -240,6 +244,19 @@ foreach(profile_flag IN ITEMS
     "--enable-filter=scale_d3d11")
   require_contains("${profile_content}" "${profile_flag}" "FFmpeg profile is missing required configure flag: ${profile_flag}")
 endforeach()
+
+require_contains(
+  "${profile_content}"
+  "\"muxer-pcm_f32le\""
+  "FFmpeg profile must declare the pcm_f32le muxer feature")
+require_not_contains(
+  "${profile_content}"
+  "\"muxer-f32le\""
+  "FFmpeg profile must not use the runtime f32le name as a configure component")
+require_not_contains(
+  "${profile_content}"
+  "--enable-muxer=f32le"
+  "FFmpeg profile must enable the pcm_f32le configure component")
 
 foreach(forbidden_flag IN ITEMS
     "--enable-gpl"
@@ -259,6 +276,24 @@ foreach(script_content IN ITEMS "${macos_build_script_content}" "${windows_build
   require_not_contains("${script_content}" "platformFeatureExtras" "Build scripts must not read removed sdk-version platformFeatureExtras")
   require_not_contains("${script_content}" "defaultFeatures" "Build scripts must not read removed sdk-version defaultFeatures")
 endforeach()
+
+foreach(component_validator_marker IN ITEMS
+    "SOURCE_DIR"
+    "libavformat/muxer_list.c"
+    "ff_pcm_f32le_muxer")
+  require_contains(
+    "${configure_component_validator_content}"
+    "${component_validator_marker}"
+    "Configure component validation is missing marker: ${component_validator_marker}")
+endforeach()
+require_contains(
+  "${macos_build_script_content}"
+  "validate-ffmpeg-components\\.cmake"
+  "macOS build must validate configured FFmpeg components")
+require_contains(
+  "${windows_build_script_content}"
+  "validate-ffmpeg-components\\.cmake"
+  "Windows build must validate configured FFmpeg components")
 
 require_contains("${macos_build_script_content}" "curl --fail --show-error --location --retry 3" "macOS source download must fail loudly and retry transient network errors")
 require_contains("${macos_build_script_content}" "VCPKG_TRIPLET" "macOS build must use the matrix-owned vcpkg triplet")
@@ -304,7 +339,10 @@ foreach(validation_marker IN ITEMS
     "ffmpegSourceSha256"
     "licenseMode"
     "NOT SDK_ARCH STREQUAL \"arm64\""
-    "validate_windows_runtime")
+    "validate_windows_runtime"
+    "validate_runtime_muxer"
+    "-muxers"
+    "f32le")
   require_contains("${validate_script_content}" "${validation_marker}" "SDK validation is missing marker: ${validation_marker}")
 endforeach()
 require_not_contains("${validate_script_content}" "windows-\\$\\{SDK_ARCH\\}-msvc" "SDK validation must not derive legacy custom Windows triplets")
