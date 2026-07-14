@@ -82,8 +82,8 @@ string(JSON source_lock_sha256 GET "${source_lock_content}" sha256)
 string(JSON vcpkg_lock_repository GET "${vcpkg_lock_content}" repository)
 string(JSON vcpkg_lock_commit GET "${vcpkg_lock_content}" commit)
 
-if(NOT sdk_version STREQUAL "20260714.1")
-  message(FATAL_ERROR "SDK version must identify the public checksum asset cleanup batch 20260714.1")
+if(NOT sdk_version STREQUAL "20260714.2")
+  message(FATAL_ERROR "SDK version must identify the first immutable release batch 20260714.2")
 endif()
 if(NOT ffmpeg_version STREQUAL "8.1.2")
   message(FATAL_ERROR "SDK must lock FFmpeg 8.1.2 until a deliberate version bump")
@@ -183,14 +183,39 @@ require_contains("${workflow_content}" "aws/homebrew-tap" "macOS x64 build must 
 require_contains("${workflow_content}" "brew install nasm" "macOS x64 build must declare nasm as a CI build tool for vcpkg aom")
 require_contains("${workflow_content}" "github\\.event_name == 'workflow_dispatch' \\|\\| startsWith\\(github\\.ref, 'refs/tags/v'\\)" "Release publishing must only run for manual dispatch or v* tags")
 require_contains("${workflow_content}" "GITHUB_REF_NAME.*release_tag" "Tag-triggered releases must validate tag name against sdkVersion")
+foreach(tag_guard_marker IN ITEMS
+    "git ls-remote --exit-code --tags origin"
+    "refs/tags/\\$\\{release_tag\\}"
+    "git rev-list -n 1"
+    "tag_commit"
+    "GITHUB_SHA")
+  require_contains(
+    "${workflow_content}"
+    "${tag_guard_marker}"
+    "Workflow is missing release tag provenance guard: ${tag_guard_marker}")
+endforeach()
 require_contains(
   "${workflow_content}"
   "ffmpeg-sdk-\\*\\.zip' -o -name 'artifact-index\\.json"
   "Release selection must contain SDK ZIP archives and artifact-index.json")
-require_not_contains(
+require_contains(
   "${workflow_content}"
-  "ffmpeg-sdk-\\*\\.zip' -o -name 'ffmpeg-sdk-\\*\\.zip\\.sha256' -o -name 'artifact-index\\.json"
-  "Release selection must not publish checksum sidecars")
+  "grep -q '\\\\.sha256\\$'"
+  "Release publishing must explicitly reject public checksum sidecars")
+foreach(release_lifecycle_marker IN ITEMS
+    "gh release create"
+    "--draft"
+    "gh release upload"
+    "gh release edit"
+    "--draft=false"
+    "release_immutable"
+    "\\.immutable"
+    "Published release is not immutable")
+  require_contains(
+    "${workflow_content}"
+    "${release_lifecycle_marker}"
+    "Workflow is missing immutable draft release lifecycle marker: ${release_lifecycle_marker}")
+endforeach()
 foreach(release_validation_marker IN ITEMS
     "expected_platform_count"
     "expected_release_asset_count"

@@ -277,9 +277,32 @@ jobs:
             exit 1
           fi
 
-          if gh release view "${release_tag}" >/dev/null 2>&1; then
+          existing_release_id="$(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              --jq ".[] | select(.tag_name == \"${release_tag}\") | .id"
+          )"
+          if [[ -n "${existing_release_id}" ]]; then
             echo "Release ${release_tag} already exists. Publish a new sdkVersion instead of replacing it." >&2
             exit 1
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            if git ls-remote --exit-code --tags origin "refs/tags/${release_tag}" >/dev/null 2>&1; then
+              echo "Tag ${release_tag} already exists. Publish a new sdkVersion instead of reusing it." >&2
+              exit 1
+            else
+              tag_lookup_status="$?"
+              if [[ "${tag_lookup_status}" -ne 2 ]]; then
+                echo "Could not verify whether tag ${release_tag} already exists." >&2
+                exit "${tag_lookup_status}"
+              fi
+            fi
+          else
+            tag_commit="$(git rev-list -n 1 "${GITHUB_REF_NAME}")"
+            if [[ "${tag_commit}" != "${GITHUB_SHA}" ]]; then
+              echo "Tag ${GITHUB_REF_NAME} resolves to ${tag_commit}, not trigger commit ${GITHUB_SHA}." >&2
+              exit 1
+            fi
           fi
 
           python3 scripts/generate-artifact-index.py \
@@ -322,16 +345,20 @@ jobs:
 
           release_args=(
             gh release create "${release_tag}"
-            "${release_files[@]}"
+            --draft
             --title "${release_title}"
             --notes "Cloud-built FFmpeg SDK for desktop clients. This release is immutable; publish a new sdkVersion for rebuilds."
           )
 
-          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             release_args+=(--target "${GITHUB_SHA}")
+          else
+            release_args+=(--verify-tag)
           fi
 
           "${release_args[@]}"
+          gh release upload "${release_tag}" "${release_files[@]}"
+          gh release edit "${release_tag}" --draft=false
 
           mapfile -t published_asset_names < <(
             gh release view "${release_tag}" --json assets --jq '.assets[].name' | sort
@@ -341,5 +368,13 @@ jobs:
               <(printf '%s\n' "${expected_asset_names[@]}") \
               <(printf '%s\n' "${published_asset_names[@]}"); then
             echo "Published release assets do not match expected files." >&2
+            exit 1
+          fi
+
+          release_immutable="$(
+            gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${release_tag}" --jq '.immutable'
+          )"
+          if [[ "${release_immutable}" != "true" ]]; then
+            echo "Published release is not immutable: ${release_immutable}" >&2
             exit 1
           fi
