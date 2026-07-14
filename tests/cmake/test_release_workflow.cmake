@@ -82,8 +82,8 @@ string(JSON source_lock_sha256 GET "${source_lock_content}" sha256)
 string(JSON vcpkg_lock_repository GET "${vcpkg_lock_content}" repository)
 string(JSON vcpkg_lock_commit GET "${vcpkg_lock_content}" commit)
 
-if(NOT sdk_version STREQUAL "20260713.1")
-  message(FATAL_ERROR "SDK version must identify the f32le muxer correction batch 20260713.1")
+if(NOT sdk_version STREQUAL "20260714.1")
+  message(FATAL_ERROR "SDK version must identify the public checksum asset cleanup batch 20260714.1")
 endif()
 if(NOT ffmpeg_version STREQUAL "8.1.2")
   message(FATAL_ERROR "SDK must lock FFmpeg 8.1.2 until a deliberate version bump")
@@ -183,6 +183,25 @@ require_contains("${workflow_content}" "aws/homebrew-tap" "macOS x64 build must 
 require_contains("${workflow_content}" "brew install nasm" "macOS x64 build must declare nasm as a CI build tool for vcpkg aom")
 require_contains("${workflow_content}" "github\\.event_name == 'workflow_dispatch' \\|\\| startsWith\\(github\\.ref, 'refs/tags/v'\\)" "Release publishing must only run for manual dispatch or v* tags")
 require_contains("${workflow_content}" "GITHUB_REF_NAME.*release_tag" "Tag-triggered releases must validate tag name against sdkVersion")
+require_contains(
+  "${workflow_content}"
+  "ffmpeg-sdk-\\*\\.zip' -o -name 'artifact-index\\.json"
+  "Release selection must contain SDK ZIP archives and artifact-index.json")
+require_not_contains(
+  "${workflow_content}"
+  "ffmpeg-sdk-\\*\\.zip' -o -name 'ffmpeg-sdk-\\*\\.zip\\.sha256' -o -name 'artifact-index\\.json"
+  "Release selection must not publish checksum sidecars")
+foreach(release_validation_marker IN ITEMS
+    "expected_platform_count"
+    "expected_release_asset_count"
+    "expected_asset_names"
+    "published_asset_names"
+    "Published release assets do not match expected files")
+  require_contains(
+    "${workflow_content}"
+    "${release_validation_marker}"
+    "Workflow is missing release asset validation marker: ${release_validation_marker}")
+endforeach()
 
 foreach(matrix_script_marker IN ITEMS
     "platform-matrix.json"

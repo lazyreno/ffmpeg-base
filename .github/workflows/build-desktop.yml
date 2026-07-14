@@ -288,9 +288,35 @@ jobs:
             --base-url "${release_base_url}" \
             --release-tag "${release_tag}"
 
-          mapfile -t release_files < <(find release-assets -type f \( -name 'ffmpeg-sdk-*.zip' -o -name 'ffmpeg-sdk-*.zip.sha256' -o -name 'artifact-index.json' \) | sort)
-          if [[ "${#release_files[@]}" -eq 0 ]]; then
-            echo "No SDK release files were downloaded." >&2
+          expected_platform_count="$(python3 - <<'PY'
+          import json
+
+          with open("config/platform-matrix.json", encoding="utf-8") as handle:
+              platforms = json.load(handle)["platforms"]
+
+          print(sum(1 for platform in platforms if platform["enabled"]))
+          PY
+          )"
+          expected_release_asset_count="$((expected_platform_count + 1))"
+
+          mapfile -t release_files < <(
+            find release-assets -maxdepth 1 -type f \
+              \( -name 'ffmpeg-sdk-*.zip' -o -name 'artifact-index.json' \) \
+              | sort
+          )
+
+          if [[ "${#release_files[@]}" -ne "${expected_release_asset_count}" ]]; then
+            echo "Expected ${expected_platform_count} SDK ZIPs plus artifact-index.json, found ${#release_files[@]}." >&2
+            printf '%s\n' "${release_files[@]}" >&2
+            exit 1
+          fi
+
+          mapfile -t expected_asset_names < <(
+            printf '%s\n' "${release_files[@]}" | xargs -n1 basename | sort
+          )
+
+          if printf '%s\n' "${expected_asset_names[@]}" | grep -q '\.sha256$'; then
+            echo "Release file selection must not contain .sha256 assets." >&2
             exit 1
           fi
 
@@ -306,3 +332,14 @@ jobs:
           fi
 
           "${release_args[@]}"
+
+          mapfile -t published_asset_names < <(
+            gh release view "${release_tag}" --json assets --jq '.assets[].name' | sort
+          )
+
+          if ! diff -u \
+              <(printf '%s\n' "${expected_asset_names[@]}") \
+              <(printf '%s\n' "${published_asset_names[@]}"); then
+            echo "Published release assets do not match expected files." >&2
+            exit 1
+          fi
