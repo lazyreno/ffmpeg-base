@@ -82,8 +82,8 @@ string(JSON source_lock_sha256 GET "${source_lock_content}" sha256)
 string(JSON vcpkg_lock_repository GET "${vcpkg_lock_content}" repository)
 string(JSON vcpkg_lock_commit GET "${vcpkg_lock_content}" commit)
 
-if(NOT sdk_version STREQUAL "20260714.2")
-  message(FATAL_ERROR "SDK version must identify the first immutable release batch 20260714.2")
+if(NOT sdk_version STREQUAL "20260715.1")
+  message(FATAL_ERROR "SDK version must identify the audio speed filter release 20260715.1")
 endif()
 if(NOT ffmpeg_version STREQUAL "8.1.2")
   message(FATAL_ERROR "SDK must lock FFmpeg 8.1.2 until a deliberate version bump")
@@ -109,6 +109,11 @@ require_contains("${vcpkg_configuration_content}" "${vcpkg_lock_commit}" "vcpkg 
 
 require_not_contains("${version_content}" "\"defaultFeatures\"" "sdk-version.json must not own FFmpeg feature lists")
 require_not_contains("${version_content}" "\"platformFeatureExtras\"" "sdk-version.json must not own platform FFmpeg feature extras")
+
+foreach(audio_speed_filter IN ITEMS atempo asetrate)
+  require_contains("${profile_content}" "\"filter-${audio_speed_filter}\"" "FFmpeg feature profile must declare the ${audio_speed_filter} filter for audio speed")
+  require_contains("${profile_content}" "--enable-filter=${audio_speed_filter}" "FFmpeg configure options must enable the ${audio_speed_filter} filter for audio speed")
+endforeach()
 
 foreach(platform_key IN ITEMS
     macos-arm64
