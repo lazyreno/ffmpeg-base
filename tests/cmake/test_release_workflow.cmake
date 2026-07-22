@@ -223,7 +223,18 @@ require_not_contains("${workflow_content}" "brew --prefix" "Workflow must not di
 require_not_contains("${workflow_content}" "brew install (aom|libvpx|mp3lame|opus|libvorbis|ffmpeg)" "Workflow must not install production codec dependencies through Homebrew")
 require_contains("${workflow_content}" "aws/homebrew-tap" "macOS x64 build must remove untrusted runner taps before invoking Homebrew")
 require_contains("${workflow_content}" "brew install nasm" "macOS x64 build must declare nasm as a CI build tool for vcpkg aom")
-require_contains("${workflow_content}" "github\\.event_name == 'workflow_dispatch' \\|\\| startsWith\\(github\\.ref, 'refs/tags/v'\\)" "Release publishing must only run for manual dispatch or v* tags")
+require_contains(
+  "${workflow_content}"
+  "github\\.event_name == 'workflow_dispatch' && github\\.ref != 'refs/heads/main'"
+  "Manual SDK release builds must reject non-main refs before the platform matrix")
+require_contains(
+  "${workflow_content}"
+  "github\\.event_name == 'workflow_dispatch' && github\\.ref == 'refs/heads/main'"
+  "Release publishing must allow manual dispatch only from refs/heads/main")
+require_contains(
+  "${workflow_content}"
+  "startsWith\\(github\\.ref, 'refs/tags/v'\\)"
+  "Release publishing must continue to allow protected v* tag triggers")
 require_contains("${workflow_content}" "GITHUB_REF_NAME.*release_tag" "Tag-triggered releases must validate tag name against sdkVersion")
 foreach(tag_guard_marker IN ITEMS
     "git ls-remote --exit-code --tags origin"

@@ -45,6 +45,12 @@ jobs:
       vcpkg_commit: ${{ steps.matrix.outputs.vcpkg_commit }}
 
     steps:
+      - name: Reject non-main manual release builds
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "Manual SDK release builds must target refs/heads/main, not ${GITHUB_REF}." >&2
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v5
 
@@ -240,7 +246,7 @@ jobs:
 
   publish-release:
     name: Publish GitHub Release
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     needs:
       - prepare-matrix
