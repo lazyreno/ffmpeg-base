@@ -165,6 +165,10 @@ foreach(platform_field IN ITEMS
   require_contains("${platform_content}" "${platform_field}" "Platform matrix must own platform field ${platform_field}")
 endforeach()
 require_contains("${platform_content}" "\"msvcArch\"" "Windows platform entries must declare msvcArch")
+require_contains(
+  "${workflow_content}"
+  "python3 -m unittest tests/python/test_validate_raw_pcm_transcode\\.py -v"
+  "Prepare matrix must run raw PCM validator unit tests before platform builds")
 
 require_not_contains("${platform_content}" "\"triplet\"[ \t\r\n]*:[ \t\r\n]*\"[^\"]*_[^\"]*\"" "vcpkg triplet names must not contain underscores")
 foreach(builtin_triplet IN ITEMS
