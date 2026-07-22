@@ -69,6 +69,8 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+__pycache__/
+*.py[cod]
 
 # Local agent planning documents
 docs/superpowers/
