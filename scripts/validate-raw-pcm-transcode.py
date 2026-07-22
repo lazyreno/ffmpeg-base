@@ -66,18 +66,42 @@ def write_pcm(path, format_name, duration_seconds=0.25):
             handle.write(encoded * CHANNELS)
 
 
-def run(command, case):
-    result = subprocess.run(command, text=True, capture_output=True, check=False)
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"Raw PCM validation failed: input={case.input_format}, "
-            f"output={case.output_format}, exit={result.returncode}\n"
-            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
-        )
-    return result.stdout
+def format_failure_diagnostics(
+    platform,
+    case,
+    reason,
+    ffmpeg_result=None,
+    ffprobe_result=None,
+):
+    def process_lines(tool_name, result):
+        if result is None:
+            return [
+                f"{tool_name}_exit=not-run",
+                f"{tool_name}_stdout=<not run>",
+                f"{tool_name}_stderr=<not run>",
+            ]
+        return [
+            f"{tool_name}_exit={result.returncode}",
+            f"{tool_name}_stdout={result.stdout}",
+            f"{tool_name}_stderr={result.stderr}",
+        ]
+
+    lines = [
+        f"Raw PCM validation failed: {reason}",
+        f"platform={platform}",
+        f"input={case.input_format}",
+        f"output={case.output_format}",
+    ]
+    lines.extend(process_lines("ffmpeg", ffmpeg_result))
+    lines.extend(process_lines("ffprobe", ffprobe_result))
+    return "\n".join(lines)
 
 
-def validate_case(ffmpeg, ffprobe, directory, case):
+def run(command):
+    return subprocess.run(command, text=True, capture_output=True, check=False)
+
+
+def validate_case(ffmpeg, ffprobe, platform, directory, case):
     input_path = directory / f"input-{case.input_format}.pcm"
     output_path = directory / f"output-{case.input_format}.{case.output_format}"
     if not input_path.exists():
@@ -88,7 +112,7 @@ def validate_case(ffmpeg, ffprobe, directory, case):
         "mp3": ["-c:a", "libmp3lame"],
         "m4a": ["-c:a", "aac"],
     }[case.output_format]
-    run(
+    ffmpeg_result = run(
         [
             str(ffmpeg),
             "-hide_banner",
@@ -111,17 +135,29 @@ def validate_case(ffmpeg, ffprobe, directory, case):
             "-vn",
             *codec_args,
             str(output_path),
-        ],
-        case,
+        ]
     )
+    if ffmpeg_result.returncode != 0:
+        raise RuntimeError(
+            format_failure_diagnostics(
+                platform,
+                case,
+                "FFmpeg encoding command returned a non-zero exit code",
+                ffmpeg_result,
+            )
+        )
 
     if not output_path.is_file() or output_path.stat().st_size == 0:
         raise RuntimeError(
-            f"Raw PCM validation produced no output: input={case.input_format}, "
-            f"output={case.output_format}"
+            format_failure_diagnostics(
+                platform,
+                case,
+                "FFmpeg produced no output file",
+                ffmpeg_result,
+            )
         )
 
-    probe_stdout = run(
+    ffprobe_result = run(
         [
             str(ffprobe),
             "-v",
@@ -131,12 +167,34 @@ def validate_case(ffmpeg, ffprobe, directory, case):
             "-show_entries",
             "stream=codec_name,sample_rate,channels:format=duration",
             str(output_path),
-        ],
-        case,
+        ]
     )
-    payload = json.loads(probe_stdout)
-    stream = payload["streams"][0]
-    duration = float(payload["format"]["duration"])
+    if ffprobe_result.returncode != 0:
+        raise RuntimeError(
+            format_failure_diagnostics(
+                platform,
+                case,
+                "FFprobe returned a non-zero exit code",
+                ffmpeg_result,
+                ffprobe_result,
+            )
+        )
+
+    try:
+        payload = json.loads(ffprobe_result.stdout)
+        stream = payload["streams"][0]
+        duration = float(payload["format"]["duration"])
+    except (json.JSONDecodeError, KeyError, IndexError, TypeError, ValueError) as error:
+        raise RuntimeError(
+            format_failure_diagnostics(
+                platform,
+                case,
+                f"FFprobe output could not be parsed: {error}",
+                ffmpeg_result,
+                ffprobe_result,
+            )
+        ) from error
+
     actual = (
         stream["codec_name"],
         int(stream["sample_rate"]),
@@ -146,9 +204,14 @@ def validate_case(ffmpeg, ffprobe, directory, case):
     expected = (case.output_codec, SAMPLE_RATE, CHANNELS)
     if actual[:3] != expected or actual[3] <= 0.0:
         raise RuntimeError(
-            f"Unexpected probe result for input={case.input_format}, "
-            f"output={case.output_format}: expected={expected} with positive duration, "
-            f"actual={actual}"
+            format_failure_diagnostics(
+                platform,
+                case,
+                f"Unexpected probe result: expected={expected} with positive duration, "
+                f"actual={actual}",
+                ffmpeg_result,
+                ffprobe_result,
+            )
         )
 
 
@@ -156,12 +219,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ffmpeg", required=True, type=Path)
     parser.add_argument("--ffprobe", required=True, type=Path)
+    parser.add_argument("--platform", required=True)
     args = parser.parse_args()
 
     with tempfile.TemporaryDirectory(prefix="ffmpeg-raw-pcm-") as temporary:
         directory = Path(temporary)
         for case in build_cases():
-            validate_case(args.ffmpeg, args.ffprobe, directory, case)
+            validate_case(args.ffmpeg, args.ffprobe, args.platform, directory, case)
 
     print("Validated 12 raw PCM transcode combinations.")
 

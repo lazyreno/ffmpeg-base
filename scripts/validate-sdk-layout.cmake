@@ -82,13 +82,14 @@ function(validate_raw_pcm_capabilities tool_path)
     endforeach()
 endfunction()
 
-function(validate_raw_pcm_transcodes ffmpeg_path ffprobe_path)
+function(validate_raw_pcm_transcodes ffmpeg_path ffprobe_path platform_name)
     find_program(PYTHON_EXECUTABLE NAMES python3 python REQUIRED)
     execute_process(
         COMMAND "${PYTHON_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/validate-raw-pcm-transcode.py"
             --ffmpeg "${ffmpeg_path}"
             --ffprobe "${ffprobe_path}"
+            --platform "${platform_name}"
         RESULT_VARIABLE transcode_result
         OUTPUT_VARIABLE transcode_output
         ERROR_VARIABLE transcode_error
@@ -215,7 +216,8 @@ if(SDK_PLATFORM STREQUAL "macos")
     validate_raw_pcm_capabilities("${SDK_ROOT}/bin/ffmpeg")
     validate_raw_pcm_transcodes(
         "${SDK_ROOT}/bin/ffmpeg"
-        "${SDK_ROOT}/bin/ffprobe")
+        "${SDK_ROOT}/bin/ffprobe"
+        "${SDK_PLATFORM}-${SDK_ARCH}")
 elseif(SDK_PLATFORM STREQUAL "windows")
     require_path("${SDK_ROOT}/bin/ffmpeg.exe" "ffmpeg.exe")
     require_path("${SDK_ROOT}/bin/ffprobe.exe" "ffprobe.exe")
@@ -234,7 +236,8 @@ elseif(SDK_PLATFORM STREQUAL "windows")
         validate_raw_pcm_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
         validate_raw_pcm_transcodes(
             "${SDK_ROOT}/bin/ffmpeg.exe"
-            "${SDK_ROOT}/bin/ffprobe.exe")
+            "${SDK_ROOT}/bin/ffprobe.exe"
+            "${SDK_PLATFORM}-${SDK_ARCH}")
     endif()
 else()
     message(FATAL_ERROR "Unsupported SDK_PLATFORM: ${SDK_PLATFORM}")

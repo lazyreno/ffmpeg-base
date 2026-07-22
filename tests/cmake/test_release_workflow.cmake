@@ -475,6 +475,8 @@ foreach(raw_pcm_validator_marker IN ITEMS
     "pcm_f32le"
     "libmp3lame"
     "aac"
+    "--platform"
+    "format_failure_diagnostics"
     "Validated 12 raw PCM transcode combinations")
   require_contains(
     "${raw_pcm_validator_content}"
@@ -485,6 +487,10 @@ require_contains(
   "${validate_script_content}"
   "validate-raw-pcm-transcode\\.py"
   "Staged SDK validation must run the raw PCM transcode validator")
+require_contains(
+  "${validate_script_content}"
+  "\\$\\{SDK_PLATFORM\\}-\\$\\{SDK_ARCH\\}"
+  "Staged SDK validation must pass the exact platform and architecture to diagnostics")
 require_not_contains("${validate_script_content}" "windows-\\$\\{SDK_ARCH\\}-msvc" "SDK validation must not derive legacy custom Windows triplets")
 require_not_contains("${validate_script_content}" "macos-\\$\\{SDK_ARCH\\}" "SDK validation must not derive legacy custom macOS triplets")
 

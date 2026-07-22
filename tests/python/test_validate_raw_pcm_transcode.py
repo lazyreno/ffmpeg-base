@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "validate-raw-pcm-transcode.py"
@@ -40,6 +41,35 @@ class RawPcmValidatorTest(unittest.TestCase):
                 path = Path(directory) / f"input.{format_name}"
                 MODULE.write_pcm(path, format_name, duration_seconds=0.01)
                 self.assertEqual(480 * 2 * width, path.stat().st_size)
+
+    def test_failure_diagnostics_include_platform_and_both_processes(self):
+        case = MODULE.TranscodeCase("s16le", "wav", "pcm_s16le")
+        ffmpeg_result = SimpleNamespace(
+            returncode=234,
+            stdout="",
+            stderr="Unknown input format: s16le",
+        )
+        ffprobe_result = SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="output is unreadable",
+        )
+
+        diagnostics = MODULE.format_failure_diagnostics(
+            "macos-arm64",
+            case,
+            "probe validation failed",
+            ffmpeg_result,
+            ffprobe_result,
+        )
+
+        self.assertIn("platform=macos-arm64", diagnostics)
+        self.assertIn("input=s16le", diagnostics)
+        self.assertIn("output=wav", diagnostics)
+        self.assertIn("ffmpeg_exit=234", diagnostics)
+        self.assertIn("Unknown input format: s16le", diagnostics)
+        self.assertIn("ffprobe_exit=1", diagnostics)
+        self.assertIn("output is unreadable", diagnostics)
 
 
 if __name__ == "__main__":
