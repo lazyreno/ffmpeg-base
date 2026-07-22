@@ -431,6 +431,20 @@ foreach(validation_marker IN ITEMS
     "f32le")
   require_contains("${validate_script_content}" "${validation_marker}" "SDK validation is missing marker: ${validation_marker}")
 endforeach()
+
+foreach(raw_pcm_validation_marker IN ITEMS
+    "validate_runtime_component"
+    "validate_raw_pcm_capabilities"
+    "-demuxers"
+    "-decoders"
+    "-encoders"
+    "foreach\\(pcm_format IN ITEMS s16le s24le s32le f32le\\)"
+    "pcm_\\$\\{pcm_format\\}")
+  require_contains(
+    "${validate_script_content}"
+    "${raw_pcm_validation_marker}"
+    "SDK validation is missing raw PCM marker: ${raw_pcm_validation_marker}")
+endforeach()
 require_not_contains("${validate_script_content}" "windows-\\$\\{SDK_ARCH\\}-msvc" "SDK validation must not derive legacy custom Windows triplets")
 require_not_contains("${validate_script_content}" "macos-\\$\\{SDK_ARCH\\}" "SDK validation must not derive legacy custom macOS triplets")
 

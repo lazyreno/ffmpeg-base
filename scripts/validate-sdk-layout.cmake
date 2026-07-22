@@ -52,6 +52,36 @@ function(validate_runtime_tool tool_path tool_name)
     endif()
 endfunction()
 
+function(validate_runtime_component tool_path list_option component_name component_kind)
+    execute_process(
+        COMMAND "${tool_path}" -hide_banner "${list_option}"
+        RESULT_VARIABLE component_result
+        OUTPUT_VARIABLE component_output
+        ERROR_VARIABLE component_error
+    )
+    set(component_diagnostics "${component_output}\n${component_error}")
+    if(NOT component_result EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to inspect staged FFmpeg ${component_kind}s for ${component_name}:\n"
+            "${component_diagnostics}")
+    endif()
+
+    if(NOT component_diagnostics MATCHES
+            "(^|\n)[^\n]*[ \t]${component_name}[ \t]+[^\n]*(\n|$)")
+        message(FATAL_ERROR
+            "Staged FFmpeg does not expose required ${component_kind} ${component_name}:\n"
+            "${component_diagnostics}")
+    endif()
+endfunction()
+
+function(validate_raw_pcm_capabilities tool_path)
+    foreach(pcm_format IN ITEMS s16le s24le s32le f32le)
+        validate_runtime_component("${tool_path}" "-demuxers" "${pcm_format}" "demuxer")
+        validate_runtime_component("${tool_path}" "-decoders" "pcm_${pcm_format}" "decoder")
+        validate_runtime_component("${tool_path}" "-encoders" "pcm_${pcm_format}" "encoder")
+    endforeach()
+endfunction()
+
 function(validate_runtime_muxer tool_path muxer_name)
     execute_process(
         COMMAND "${tool_path}" -hide_banner -muxers
@@ -163,6 +193,7 @@ if(SDK_PLATFORM STREQUAL "macos")
     validate_runtime_tool("${SDK_ROOT}/bin/ffmpeg" "ffmpeg")
     validate_runtime_tool("${SDK_ROOT}/bin/ffprobe" "ffprobe")
     validate_runtime_muxer("${SDK_ROOT}/bin/ffmpeg" "f32le")
+    validate_raw_pcm_capabilities("${SDK_ROOT}/bin/ffmpeg")
 elseif(SDK_PLATFORM STREQUAL "windows")
     require_path("${SDK_ROOT}/bin/ffmpeg.exe" "ffmpeg.exe")
     require_path("${SDK_ROOT}/bin/ffprobe.exe" "ffprobe.exe")
@@ -178,6 +209,7 @@ elseif(SDK_PLATFORM STREQUAL "windows")
         validate_runtime_tool("${SDK_ROOT}/bin/ffmpeg.exe" "ffmpeg.exe")
         validate_runtime_tool("${SDK_ROOT}/bin/ffprobe.exe" "ffprobe.exe")
         validate_runtime_muxer("${SDK_ROOT}/bin/ffmpeg.exe" "f32le")
+        validate_raw_pcm_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
     endif()
 else()
     message(FATAL_ERROR "Unsupported SDK_PLATFORM: ${SDK_PLATFORM}")
