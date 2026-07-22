@@ -358,8 +358,15 @@ endforeach()
 
 foreach(component_validator_marker IN ITEMS
     "SOURCE_DIR"
+    "require_registry_symbol"
+    "libavformat/demuxer_list.c"
     "libavformat/muxer_list.c"
-    "ff_pcm_f32le_muxer")
+    "libavcodec/codec_list.c"
+    "ff_pcm_f32le_muxer"
+    "foreach\\(pcm_format IN ITEMS s16le s24le s32le f32le\\)"
+    "ff_pcm_\\$\\{pcm_format\\}_demuxer"
+    "ff_pcm_\\$\\{pcm_format\\}_decoder"
+    "ff_pcm_\\$\\{pcm_format\\}_encoder")
   require_contains(
     "${configure_component_validator_content}"
     "${component_validator_marker}"
