@@ -82,8 +82,8 @@ string(JSON source_lock_sha256 GET "${source_lock_content}" sha256)
 string(JSON vcpkg_lock_repository GET "${vcpkg_lock_content}" repository)
 string(JSON vcpkg_lock_commit GET "${vcpkg_lock_content}" commit)
 
-if(NOT sdk_version STREQUAL "20260717.1")
-  message(FATAL_ERROR "SDK version must identify the audio reverse filter release 20260717.1")
+if(NOT sdk_version STREQUAL "20260722.1")
+  message(FATAL_ERROR "SDK version must identify the raw PCM recording release 20260722.1")
 endif()
 if(NOT ffmpeg_version STREQUAL "8.1.2")
   message(FATAL_ERROR "SDK must lock FFmpeg 8.1.2 until a deliberate version bump")
@@ -116,6 +116,34 @@ foreach(audio_filter IN ITEMS atempo asetrate areverse)
 endforeach()
 require_contains("${profile_content}" "\"encoder-mjpeg\"" "FFmpeg feature profile must declare the MJPEG encoder for JPG thumbnail output")
 require_contains("${profile_content}" "--enable-encoder=mjpeg" "FFmpeg configure options must enable the MJPEG encoder for JPG thumbnail output")
+
+foreach(pcm_format IN ITEMS s16le s24le s32le f32le)
+  require_contains(
+    "${profile_content}"
+    "\"demuxer-pcm_${pcm_format}\""
+    "FFmpeg feature profile must declare the pcm_${pcm_format} demuxer")
+  require_contains(
+    "${profile_content}"
+    "--enable-demuxer=pcm_${pcm_format}"
+    "FFmpeg configure options must enable the pcm_${pcm_format} demuxer")
+  require_not_contains(
+    "${profile_content}"
+    "--enable-demuxer=${pcm_format}\""
+    "FFmpeg configure must use pcm_${pcm_format}, not runtime name ${pcm_format}")
+endforeach()
+
+foreach(pcm_format IN ITEMS s24le s32le)
+  foreach(codec_direction IN ITEMS decoder encoder)
+    require_contains(
+      "${profile_content}"
+      "\"${codec_direction}-pcm_${pcm_format}\""
+      "FFmpeg feature profile must declare ${codec_direction}-pcm_${pcm_format}")
+    require_contains(
+      "${profile_content}"
+      "--enable-${codec_direction}=pcm_${pcm_format}"
+      "FFmpeg configure options must enable ${codec_direction}=pcm_${pcm_format}")
+  endforeach()
+endforeach()
 
 foreach(platform_key IN ITEMS
     macos-arm64
