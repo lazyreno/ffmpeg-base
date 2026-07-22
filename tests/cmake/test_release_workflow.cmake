@@ -11,6 +11,7 @@ set(vcpkg_manifest "${repo_root}/vcpkg.json")
 set(vcpkg_configuration "${repo_root}/vcpkg-configuration.json")
 set(matrix_script "${repo_root}/scripts/generate-github-matrix.py")
 set(artifact_index_script "${repo_root}/scripts/generate-artifact-index.py")
+set(raw_pcm_validator "${repo_root}/scripts/validate-raw-pcm-transcode.py")
 set(macos_build_script "${repo_root}/scripts/build-macos.sh")
 set(windows_build_script "${repo_root}/scripts/build-windows-msvc.ps1")
 set(stage_script "${repo_root}/scripts/stage-sdk.sh")
@@ -30,6 +31,7 @@ foreach(required_file IN ITEMS
     "${vcpkg_configuration}"
     "${matrix_script}"
     "${artifact_index_script}"
+    "${raw_pcm_validator}"
     "${macos_build_script}"
     "${windows_build_script}"
     "${stage_script}"
@@ -52,6 +54,7 @@ file(READ "${vcpkg_manifest}" vcpkg_manifest_content)
 file(READ "${vcpkg_configuration}" vcpkg_configuration_content)
 file(READ "${matrix_script}" matrix_script_content)
 file(READ "${artifact_index_script}" artifact_index_script_content)
+file(READ "${raw_pcm_validator}" raw_pcm_validator_content)
 file(READ "${macos_build_script}" macos_build_script_content)
 file(READ "${windows_build_script}" windows_build_script_content)
 file(READ "${stage_script}" stage_script_content)
@@ -445,6 +448,28 @@ foreach(raw_pcm_validation_marker IN ITEMS
     "${raw_pcm_validation_marker}"
     "SDK validation is missing raw PCM marker: ${raw_pcm_validation_marker}")
 endforeach()
+
+foreach(raw_pcm_validator_marker IN ITEMS
+    "s16le"
+    "s24le"
+    "s32le"
+    "f32le"
+    "pcm_s16le"
+    "pcm_s24le"
+    "pcm_s32le"
+    "pcm_f32le"
+    "libmp3lame"
+    "aac"
+    "Validated 12 raw PCM transcode combinations")
+  require_contains(
+    "${raw_pcm_validator_content}"
+    "${raw_pcm_validator_marker}"
+    "Raw PCM validator is missing marker: ${raw_pcm_validator_marker}")
+endforeach()
+require_contains(
+  "${validate_script_content}"
+  "validate-raw-pcm-transcode\\.py"
+  "Staged SDK validation must run the raw PCM transcode validator")
 require_not_contains("${validate_script_content}" "windows-\\$\\{SDK_ARCH\\}-msvc" "SDK validation must not derive legacy custom Windows triplets")
 require_not_contains("${validate_script_content}" "macos-\\$\\{SDK_ARCH\\}" "SDK validation must not derive legacy custom macOS triplets")
 
