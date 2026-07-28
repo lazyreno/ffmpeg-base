@@ -85,8 +85,8 @@ string(JSON source_lock_sha256 GET "${source_lock_content}" sha256)
 string(JSON vcpkg_lock_repository GET "${vcpkg_lock_content}" repository)
 string(JSON vcpkg_lock_commit GET "${vcpkg_lock_content}" commit)
 
-if(NOT sdk_version STREQUAL "20260722.1")
-  message(FATAL_ERROR "SDK version must identify the raw PCM recording release 20260722.1")
+if(NOT sdk_version STREQUAL "20260723.1")
+  message(FATAL_ERROR "SDK version must identify the GPL software recording release 20260723.1")
 endif()
 if(NOT ffmpeg_version STREQUAL "8.1.2")
   message(FATAL_ERROR "SDK must lock FFmpeg 8.1.2 until a deliberate version bump")
@@ -94,8 +94,14 @@ endif()
 if(NOT feature_profile STREQUAL profile_name)
   message(FATAL_ERROR "sdk-version featureProfile must match config/ffmpeg-profile.json profile")
 endif()
-if(NOT sdk_license STREQUAL profile_license OR NOT sdk_license STREQUAL "lgpl")
-  message(FATAL_ERROR "SDK version and FFmpeg profile must agree on LGPL license mode")
+if(NOT feature_profile STREQUAL "gpl-software-desktop-app-v1")
+  message(FATAL_ERROR "SDK version must identify the gpl-software-desktop-app-v1 feature profile")
+endif()
+if(NOT profile_name STREQUAL "gpl-software-desktop-app-v1")
+  message(FATAL_ERROR "FFmpeg profile must be named gpl-software-desktop-app-v1")
+endif()
+if(NOT sdk_license STREQUAL profile_license OR NOT sdk_license STREQUAL "gpl")
+  message(FATAL_ERROR "SDK version and FFmpeg profile must agree on GPL license mode")
 endif()
 string(LENGTH "${source_lock_sha256}" source_lock_sha256_length)
 if(NOT source_lock_sha256_length EQUAL 64 OR NOT source_lock_sha256 MATCHES "^[0-9a-f]+$")
@@ -315,7 +321,7 @@ foreach(index_script_marker IN ITEMS
   require_contains("${artifact_index_script_content}" "${index_script_marker}" "Artifact index script is missing marker: ${index_script_marker}")
 endforeach()
 
-foreach(vcpkg_package IN ITEMS mp3lame libvpx aom opus libvorbis)
+foreach(vcpkg_package IN ITEMS mp3lame libvpx aom opus libvorbis x264 x265)
   require_contains("${vcpkg_manifest_content}" "\"${vcpkg_package}\"" "vcpkg manifest must declare ${vcpkg_package}")
 endforeach()
 
@@ -334,12 +340,41 @@ foreach(profile_flag IN ITEMS
     "--enable-decoder=h264"
     "--enable-parser=h264"
     "--enable-filter=scale"
-    "--enable-videotoolbox"
-    "--enable-audiotoolbox"
-    "--enable-mediafoundation"
-    "--enable-d3d11va"
-    "--enable-filter=scale_d3d11")
+    "--enable-gpl"
+    "--enable-libx264"
+    "--enable-libx265"
+    "--enable-encoder=libx264"
+    "--enable-encoder=libx265")
   require_contains("${profile_content}" "${profile_flag}" "FFmpeg profile is missing required configure flag: ${profile_flag}")
+endforeach()
+
+foreach(profile_feature IN ITEMS libx264 libx265 encoder-libx264 encoder-libx265)
+  require_contains("${profile_content}" "\"${profile_feature}\"" "FFmpeg profile is missing required common feature: ${profile_feature}")
+endforeach()
+
+string(JSON macos_feature_length LENGTH "${profile_content}" features macos)
+string(JSON windows_feature_length LENGTH "${profile_content}" features windows)
+string(JSON macos_configure_length LENGTH "${profile_content}" configure macos)
+string(JSON windows_configure_length LENGTH "${profile_content}" configure windows)
+if(NOT macos_feature_length EQUAL 0 OR NOT windows_feature_length EQUAL 0)
+  message(FATAL_ERROR "FFmpeg software profile must not declare platform feature extras")
+endif()
+if(NOT macos_configure_length EQUAL 2 OR NOT windows_configure_length EQUAL 0)
+  message(FATAL_ERROR "FFmpeg software profile must use only the two required macOS configure flags")
+endif()
+string(JSON macos_configure_0 GET "${profile_content}" configure macos 0)
+string(JSON macos_configure_1 GET "${profile_content}" configure macos 1)
+if(NOT macos_configure_0 STREQUAL "--disable-xlib" OR NOT macos_configure_1 STREQUAL "--disable-libxcb")
+  message(FATAL_ERROR "FFmpeg software profile macOS configure flags must be --disable-xlib and --disable-libxcb")
+endif()
+
+foreach(forbidden_hardware_marker IN ITEMS
+    videotoolbox audiotoolbox mediafoundation d3d11va hwaccel hwupload hwdownload
+    scale_d3d11 h264_mf hevc_mf)
+  require_not_contains(
+    "${profile_content}"
+    "${forbidden_hardware_marker}"
+    "FFmpeg software profile must not contain hardware marker ${forbidden_hardware_marker}")
 endforeach()
 
 require_contains(
@@ -356,13 +391,10 @@ require_not_contains(
   "FFmpeg profile must enable the pcm_f32le configure component")
 
 foreach(forbidden_flag IN ITEMS
-    "--enable-gpl"
     "--enable-version3"
-    "--enable-libx264"
-    "--enable-libx265"
     "--enable-libdav1d"
     "--enable-libvmaf")
-  require_not_contains("${profile_content}" "${forbidden_flag}" "LGPL FFmpeg profile must not enable forbidden flag ${forbidden_flag}")
+  require_not_contains("${profile_content}" "${forbidden_flag}" "FFmpeg software profile must not enable forbidden flag ${forbidden_flag}")
   require_not_contains("${macos_build_script_content}" "${forbidden_flag}" "macOS build script must not enable forbidden flag ${forbidden_flag}")
   require_not_contains("${windows_build_script_content}" "${forbidden_flag}" "Windows build script must not enable forbidden flag ${forbidden_flag}")
 endforeach()
@@ -377,10 +409,17 @@ endforeach()
 foreach(component_validator_marker IN ITEMS
     "SOURCE_DIR"
     "require_registry_symbol"
+    "reject_registry_symbol"
     "libavformat/demuxer_list.c"
     "libavformat/muxer_list.c"
     "libavcodec/codec_list.c"
     "ff_pcm_f32le_muxer"
+    "ff_libx264_encoder"
+    "ff_libx265_encoder"
+    "ff_h264_videotoolbox_encoder"
+    "ff_hevc_videotoolbox_encoder"
+    "ff_h264_mf_encoder"
+    "ff_hevc_mf_encoder"
     "foreach\\(pcm_format IN ITEMS s16le s24le s32le f32le\\)"
     "ff_pcm_\\$\\{pcm_format\\}_demuxer"
     "ff_pcm_\\$\\{pcm_format\\}_decoder"
@@ -400,12 +439,23 @@ require_contains(
   "Windows build must validate configured FFmpeg components")
 
 require_contains("${macos_build_script_content}" "curl --fail --show-error --location --retry 3" "macOS source download must fail loudly and retry transient network errors")
+require_contains("${workflow_content}" "MACOSX_DEPLOYMENT_TARGET: \"11.0\"" "macOS vcpkg installation must target the SDK minimum macOS version")
+require_contains("${macos_build_script_content}" "MACOSX_DEPLOYMENT_TARGET" "macOS SDK build must export the deployment target for its toolchain")
 require_contains("${macos_build_script_content}" "VCPKG_TRIPLET" "macOS build must use the matrix-owned vcpkg triplet")
 require_not_contains("${macos_build_script_content}" "--overlay-triplets" "macOS build diagnostics must not reference removed custom triplets")
 require_not_contains("${macos_build_script_content}" "mapfile" "macOS build script must not require Bash 4 mapfile on GitHub macOS runners")
 require_contains("${macos_build_script_content}" "GIT_CEILING_DIRECTORIES" "macOS SDK build must prevent FFmpeg version.sh from reading ffmpeg-base git metadata")
 require_contains("${macos_build_script_content}" "--disable-x86asm" "macOS x86_64 build must not depend on unpinned nasm")
 require_not_contains("${macos_build_script_content}" "brew --prefix" "macOS build must not discover production dependencies through Homebrew")
+
+foreach(codec_dependency IN ITEMS x264 x265)
+  string(TOUPPER "${codec_dependency}" codec_dependency_prefix)
+  require_contains("${macos_build_script_content}" "dependency_prefix ${codec_dependency_prefix}_PREFIX ${codec_dependency} include/${codec_dependency}\\.h" "macOS build must validate the ${codec_dependency} vcpkg header")
+  require_contains("${macos_build_script_content}" "\\$\\{${codec_dependency_prefix}_PREFIX\\}" "macOS build must include the ${codec_dependency} prefix in FFmpeg search paths")
+  require_contains("${windows_build_script_content}" "include/${codec_dependency}\\.h" "Windows build must validate the ${codec_dependency} vcpkg header")
+endforeach()
+require_contains("${macos_build_script_content}" "desktop GPL software SDK profile" "macOS dependency errors must identify the GPL software SDK profile")
+require_not_contains("${macos_build_script_content}" "desktop LGPL app SDK profile" "macOS dependency errors must not identify the retired LGPL app SDK profile")
 
 require_contains("${windows_build_script_content}" "--toolchain=msvc" "Windows SDK build must use FFmpeg's MSVC toolchain")
 require_contains("${windows_build_script_content}" "--cc=clang-cl" "Windows SDK build must use clang-cl with the MSVC ABI")
@@ -415,6 +465,12 @@ require_contains("${windows_build_script_content}" "\\$VcpkgTriplet = \"x64-wind
 require_contains("${windows_build_script_content}" "\\$VcpkgTriplet = \"arm64-windows\"" "Windows build must map arm64 to built-in vcpkg triplet")
 require_contains("${windows_build_script_content}" "MaximumRetryCount 3" "Windows source download must retry transient network errors")
 require_not_contains("${windows_build_script_content}" "VcpkgDependencyTriplet" "Windows build must not reference the removed VcpkgDependencyTriplet variable")
+foreach(codec_dependency IN ITEMS x264 x265)
+  require_contains("${windows_build_script_content}" "\\*${codec_dependency}\\*\\.dll" "Windows build must stage ${codec_dependency} runtime DLLs")
+  require_contains("${windows_build_script_content}" "${codec_dependency}" "Windows build must stage ${codec_dependency} license metadata")
+  require_contains("${stage_script_content}" "lib${codec_dependency}\\*\\.dylib" "macOS staging must recognize lib${codec_dependency} runtime libraries")
+  require_contains("${stage_script_content}" "LICENSE\\.${codec_dependency}\\.txt" "macOS staging must name the ${codec_dependency} license file")
+endforeach()
 
 foreach(manifest_var IN ITEMS
     FFMPEG_SOURCE_URL
@@ -462,6 +518,24 @@ foreach(raw_pcm_validation_marker IN ITEMS
     "${validate_script_content}"
     "${raw_pcm_validation_marker}"
     "SDK validation is missing raw PCM marker: ${raw_pcm_validation_marker}")
+endforeach()
+
+foreach(software_runtime_validation_marker IN ITEMS
+    "libx264"
+    "libx265"
+    "-hwaccels"
+    "h264_videotoolbox"
+    "hevc_videotoolbox"
+    "h264_mf"
+    "hevc_mf"
+    "d3d11va"
+    "hwupload"
+    "hwdownload"
+    "scale_d3d11")
+  require_contains(
+    "${validate_script_content}"
+    "${software_runtime_validation_marker}"
+    "SDK validation is missing software-only runtime marker: ${software_runtime_validation_marker}")
 endforeach()
 
 foreach(raw_pcm_validator_marker IN ITEMS

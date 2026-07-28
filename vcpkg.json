@@ -6,6 +6,8 @@
     "libvpx",
     "aom",
     "opus",
-    "libvorbis"
+    "libvorbis",
+    "x264",
+    "x265"
   ]
 }

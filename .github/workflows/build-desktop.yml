@@ -196,6 +196,8 @@ jobs:
 
       - name: Install macOS LGPL codec dependencies
         if: matrix.buildFamily == 'macos'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
         run: |
           "${{ github.workspace }}/.vcpkg-root/vcpkg" install \
             --vcpkg-root "${{ github.workspace }}/.vcpkg-root" \
@@ -223,6 +225,7 @@ jobs:
           SDK_ARCH: ${{ matrix.arch }}
           VCPKG_ROOT: ${{ github.workspace }}/.vcpkg-root
           VCPKG_INSTALLED_DIR: ${{ github.workspace }}/.vcpkg-installed
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
         run: scripts/build-macos.sh
 
       - name: Build Windows SDK

@@ -82,6 +82,7 @@ SDK_DIR_NAME="ffmpeg-sdk-${FFMPEG_VERSION}-v${SDK_VERSION}-${PLATFORM_KEY}"
 SDK_ROOT="${SDK_PARENT_DIR}/${SDK_DIR_NAME}"
 ARCHIVE_PATH="${DIST_DIR}/${SDK_DIR_NAME}.zip"
 MACOS_MIN_VERSION="${MACOS_MIN_VERSION:-11.0}"
+export MACOSX_DEPLOYMENT_TARGET="${MACOS_MIN_VERSION}"
 
 VCPKG_ROOT="${VCPKG_ROOT:-${VCPKG_INSTALLATION_ROOT:-}}"
 if [[ -n "${VCPKG_INSTALLED_DIR:-}" ]]; then
@@ -103,7 +104,7 @@ dependency_prefix() {
     value="${VCPKG_DEPENDENCY_ROOT}"
   fi
   if [[ -z "${value}" || ! -f "${value}/${header}" || ! -d "${value}/lib" ]]; then
-    echo "${package_name} headers and libraries are required for the desktop LGPL app SDK profile." >&2
+    echo "${package_name} headers and libraries are required for the desktop GPL software SDK profile." >&2
     echo "Run vcpkg install --triplet ${VCPKG_TRIPLET}, or set ${env_name} to a prefix containing ${header} and lib/." >&2
     exit 1
   fi
@@ -115,6 +116,8 @@ LIBVPX_PREFIX="$(dependency_prefix LIBVPX_PREFIX libvpx include/vpx/vpx_encoder.
 LIBAOM_PREFIX="$(dependency_prefix LIBAOM_PREFIX aom include/aom/aom_encoder.h)"
 OPUS_PREFIX="$(dependency_prefix OPUS_PREFIX opus include/opus/opus.h)"
 LIBVORBIS_PREFIX="$(dependency_prefix LIBVORBIS_PREFIX libvorbis include/vorbis/codec.h)"
+X264_PREFIX="$(dependency_prefix X264_PREFIX x264 include/x264.h)"
+X265_PREFIX="$(dependency_prefix X265_PREFIX x265 include/x265.h)"
 
 EXTERNAL_PREFIXES=(
   "${LAME_PREFIX}"
@@ -122,6 +125,8 @@ EXTERNAL_PREFIXES=(
   "${LIBAOM_PREFIX}"
   "${OPUS_PREFIX}"
   "${LIBVORBIS_PREFIX}"
+  "${X264_PREFIX}"
+  "${X265_PREFIX}"
 )
 EXTERNAL_CFLAGS=()
 EXTERNAL_LDFLAGS=()

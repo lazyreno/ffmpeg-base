@@ -74,11 +74,57 @@ function(validate_runtime_component tool_path list_option component_name compone
     endif()
 endfunction()
 
+function(reject_runtime_component tool_path list_option component_name component_kind)
+    execute_process(
+        COMMAND "${tool_path}" -hide_banner "${list_option}"
+        RESULT_VARIABLE component_result
+        OUTPUT_VARIABLE component_output
+        ERROR_VARIABLE component_error
+    )
+    set(component_diagnostics "${component_output}\n${component_error}")
+    if(NOT component_result EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to inspect staged FFmpeg ${component_kind}s for ${component_name}:\n"
+            "${component_diagnostics}")
+    endif()
+
+    if(component_diagnostics MATCHES
+            "(^|\n)[ \t]*${component_name}([ \t]|\n|$)"
+            OR component_diagnostics MATCHES
+            "(^|\n)[^\n]*[ \t]${component_name}([ \t]|\n|$)")
+        message(FATAL_ERROR
+            "Staged FFmpeg unexpectedly exposes forbidden ${component_kind} ${component_name}:\n"
+            "${component_diagnostics}")
+    endif()
+endfunction()
+
 function(validate_raw_pcm_capabilities tool_path)
     foreach(pcm_format IN ITEMS s16le s24le s32le f32le)
         validate_runtime_component("${tool_path}" "-demuxers" "${pcm_format}" "demuxer")
         validate_runtime_component("${tool_path}" "-decoders" "pcm_${pcm_format}" "decoder")
         validate_runtime_component("${tool_path}" "-encoders" "pcm_${pcm_format}" "encoder")
+    endforeach()
+endfunction()
+
+function(validate_software_runtime_capabilities tool_path)
+    foreach(software_encoder IN ITEMS libx264 libx265)
+        validate_runtime_component("${tool_path}" "-encoders" "${software_encoder}" "encoder")
+    endforeach()
+
+    foreach(hardware_encoder IN ITEMS
+            h264_videotoolbox
+            hevc_videotoolbox
+            h264_mf
+            hevc_mf)
+        reject_runtime_component("${tool_path}" "-encoders" "${hardware_encoder}" "encoder")
+    endforeach()
+
+    foreach(hardware_accelerator IN ITEMS videotoolbox mediafoundation d3d11va)
+        reject_runtime_component("${tool_path}" "-hwaccels" "${hardware_accelerator}" "hardware accelerator")
+    endforeach()
+
+    foreach(hardware_filter IN ITEMS hwupload hwdownload scale_d3d11)
+        reject_runtime_component("${tool_path}" "-filters" "${hardware_filter}" "filter")
     endforeach()
 endfunction()
 
@@ -214,6 +260,7 @@ if(SDK_PLATFORM STREQUAL "macos")
     validate_runtime_tool("${SDK_ROOT}/bin/ffprobe" "ffprobe")
     validate_runtime_muxer("${SDK_ROOT}/bin/ffmpeg" "f32le")
     validate_raw_pcm_capabilities("${SDK_ROOT}/bin/ffmpeg")
+    validate_software_runtime_capabilities("${SDK_ROOT}/bin/ffmpeg")
     validate_raw_pcm_transcodes(
         "${SDK_ROOT}/bin/ffmpeg"
         "${SDK_ROOT}/bin/ffprobe"
@@ -234,6 +281,7 @@ elseif(SDK_PLATFORM STREQUAL "windows")
         validate_runtime_tool("${SDK_ROOT}/bin/ffprobe.exe" "ffprobe.exe")
         validate_runtime_muxer("${SDK_ROOT}/bin/ffmpeg.exe" "f32le")
         validate_raw_pcm_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
+        validate_software_runtime_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
         validate_raw_pcm_transcodes(
             "${SDK_ROOT}/bin/ffmpeg.exe"
             "${SDK_ROOT}/bin/ffprobe.exe"

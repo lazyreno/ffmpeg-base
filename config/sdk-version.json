@@ -1,8 +1,8 @@
 {
-  "sdkVersion": "20260722.1",
+  "sdkVersion": "20260723.1",
   "ffmpegVersion": "8.1.2",
   "releaseChannel": "stable",
-  "licenseMode": "lgpl",
-  "featureProfile": "lgpl-desktop-app-v1",
+  "licenseMode": "gpl",
+  "featureProfile": "gpl-software-desktop-app-v1",
   "vcpkgBaseline": "1b31135aadd41bfd2c9e76d06b5f815e54a0adea"
 }

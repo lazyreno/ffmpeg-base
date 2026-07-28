@@ -11,6 +11,13 @@ function(require_registry_symbol registry_path registry_content symbol descripti
     endif()
 endfunction()
 
+function(reject_registry_symbol registry_path registry_content symbol description)
+    if("${registry_content}" MATCHES "${symbol}")
+        message(FATAL_ERROR
+            "FFmpeg configure unexpectedly registered ${description} (${symbol}) in ${registry_path}")
+    endif()
+endfunction()
+
 set(demuxer_list "${SOURCE_DIR}/libavformat/demuxer_list.c")
 set(muxer_list "${SOURCE_DIR}/libavformat/muxer_list.c")
 set(codec_list "${SOURCE_DIR}/libavcodec/codec_list.c")
@@ -32,6 +39,24 @@ require_registry_symbol(
 require_registry_symbol(
     "${codec_list}" "${codec_list_content}"
     "ff_mjpeg_encoder" "MJPEG encoder")
+require_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
+    "ff_libx264_encoder" "libx264 encoder")
+require_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
+    "ff_libx265_encoder" "libx265 encoder")
+reject_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
+    "ff_h264_videotoolbox_encoder" "h264_videotoolbox hardware encoder")
+reject_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
+    "ff_hevc_videotoolbox_encoder" "hevc_videotoolbox hardware encoder")
+reject_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
+    "ff_h264_mf_encoder" "h264_mf hardware encoder")
+reject_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
+    "ff_hevc_mf_encoder" "hevc_mf hardware encoder")
 
 foreach(pcm_format IN ITEMS s16le s24le s32le f32le)
     require_registry_symbol(

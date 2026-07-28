@@ -83,7 +83,9 @@ $RequiredVcpkgDependencyHeaders = @(
     "include/vpx/vpx_encoder.h",
     "include/aom/aom_encoder.h",
     "include/opus/opus.h",
-    "include/vorbis/codec.h"
+    "include/vorbis/codec.h",
+    "include/x264.h",
+    "include/x265.h"
 )
 foreach ($RequiredHeader in $RequiredVcpkgDependencyHeaders) {
     if (!(Test-Path (Join-Path $VcpkgDependencyRoot $RequiredHeader))) {
@@ -223,12 +225,12 @@ for import_lib in avcodec avdevice avfilter avformat avutil swresample swscale; 
   cp -p "`${import_lib_path}" "$MsysInstallPrefix/lib/`${import_lib}.lib"
 done
 if [[ -d '$MsysVcpkgDependencyRoot/bin' ]]; then
-  for runtime_pattern in '*mp3lame*.dll' '*vpx*.dll' '*aom*.dll' '*opus*.dll' '*vorbis*.dll' '*ogg*.dll'; do
+  for runtime_pattern in '*mp3lame*.dll' '*vpx*.dll' '*aom*.dll' '*opus*.dll' '*vorbis*.dll' '*ogg*.dll' '*x264*.dll' '*x265*.dll'; do
     find '$MsysVcpkgDependencyRoot/bin' -maxdepth 1 -type f -iname "`${runtime_pattern}" \
       -exec cp -p {} '$MsysInstallPrefix/bin/' \;
   done
 fi
-for package_name in mp3lame libvpx aom opus libvorbis libogg; do
+for package_name in mp3lame libvpx aom opus libvorbis libogg x264 x265; do
   mkdir -p "$MsysInstallPrefix/licenses/`${package_name}"
   if [[ -f "$MsysVcpkgDependencyRoot/share/`${package_name}/copyright" ]]; then
     cp -p "$MsysVcpkgDependencyRoot/share/`${package_name}/copyright" "$MsysInstallPrefix/licenses/`${package_name}/LICENSE"
