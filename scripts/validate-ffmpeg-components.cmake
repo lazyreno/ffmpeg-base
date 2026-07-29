@@ -21,8 +21,13 @@ endfunction()
 set(demuxer_list "${SOURCE_DIR}/libavformat/demuxer_list.c")
 set(muxer_list "${SOURCE_DIR}/libavformat/muxer_list.c")
 set(codec_list "${SOURCE_DIR}/libavcodec/codec_list.c")
+set(filter_list "${SOURCE_DIR}/libavfilter/filter_list.c")
 
-foreach(registry_path IN ITEMS "${demuxer_list}" "${muxer_list}" "${codec_list}")
+foreach(registry_path IN ITEMS
+        "${demuxer_list}"
+        "${muxer_list}"
+        "${codec_list}"
+        "${filter_list}")
     if(NOT EXISTS "${registry_path}")
         message(FATAL_ERROR
             "FFmpeg generated registry was not found after configure: ${registry_path}")
@@ -32,6 +37,13 @@ endforeach()
 file(READ "${demuxer_list}" demuxer_list_content)
 file(READ "${muxer_list}" muxer_list_content)
 file(READ "${codec_list}" codec_list_content)
+file(READ "${filter_list}" filter_list_content)
+
+foreach(audio_filter IN ITEMS adelay aformat amix aresample pan volume)
+    require_registry_symbol(
+        "${filter_list}" "${filter_list_content}"
+        "ff_af_${audio_filter}" "${audio_filter} audio filter")
+endforeach()
 
 require_registry_symbol(
     "${muxer_list}" "${muxer_list_content}"
