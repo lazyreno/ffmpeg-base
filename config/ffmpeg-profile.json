@@ -104,7 +104,10 @@
       "bsf-aac_adtstoasc",
       "bsf-h264_mp4toannexb",
       "bsf-hevc_mp4toannexb",
+      "filter-adelay",
       "filter-afade",
+      "filter-aformat",
+      "filter-amix",
       "filter-anull",
       "filter-aresample",
       "filter-asetrate",
@@ -121,6 +124,7 @@
       "filter-scale",
       "filter-setpts",
       "filter-split",
+      "filter-pan",
       "filter-volume"
     ],
     "macos": [],
@@ -229,7 +233,10 @@
       "--enable-bsf=aac_adtstoasc",
       "--enable-bsf=h264_mp4toannexb",
       "--enable-bsf=hevc_mp4toannexb",
+      "--enable-filter=adelay",
       "--enable-filter=afade",
+      "--enable-filter=aformat",
+      "--enable-filter=amix",
       "--enable-filter=anull",
       "--enable-filter=aresample",
       "--enable-filter=asetrate",
@@ -246,6 +253,7 @@
       "--enable-filter=scale",
       "--enable-filter=setpts",
       "--enable-filter=split",
+      "--enable-filter=pan",
       "--enable-filter=volume"
     ],
     "macos": [
