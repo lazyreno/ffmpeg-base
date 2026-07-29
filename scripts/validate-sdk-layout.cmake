@@ -106,6 +106,12 @@ function(validate_raw_pcm_capabilities tool_path)
     endforeach()
 endfunction()
 
+function(validate_stem_export_filters tool_path)
+    foreach(audio_filter IN ITEMS adelay aformat amix aresample pan volume)
+        validate_runtime_component("${tool_path}" "-filters" "${audio_filter}" "filter")
+    endforeach()
+endfunction()
+
 function(validate_software_runtime_capabilities tool_path)
     foreach(software_encoder IN ITEMS libx264 libx265)
         validate_runtime_component("${tool_path}" "-encoders" "${software_encoder}" "encoder")
@@ -146,6 +152,26 @@ function(validate_raw_pcm_transcodes ffmpeg_path ffprobe_path platform_name)
             "${transcode_output}\n${transcode_error}")
     endif()
     message(STATUS "${transcode_output}")
+endfunction()
+
+function(validate_ai_stem_export ffmpeg_path ffprobe_path platform_name)
+    find_program(PYTHON_EXECUTABLE NAMES python3 python REQUIRED)
+    execute_process(
+        COMMAND "${PYTHON_EXECUTABLE}"
+            "${CMAKE_CURRENT_LIST_DIR}/validate-ai-stem-export.py"
+            --ffmpeg "${ffmpeg_path}"
+            --ffprobe "${ffprobe_path}"
+            --platform "${platform_name}"
+        RESULT_VARIABLE stem_export_result
+        OUTPUT_VARIABLE stem_export_output
+        ERROR_VARIABLE stem_export_error
+    )
+    if(NOT stem_export_result EQUAL 0)
+        message(FATAL_ERROR
+            "AI stem export validation failed:\n"
+            "${stem_export_output}\n${stem_export_error}")
+    endif()
+    message(STATUS "${stem_export_output}")
 endfunction()
 
 function(validate_runtime_muxer tool_path muxer_name)
@@ -260,8 +286,13 @@ if(SDK_PLATFORM STREQUAL "macos")
     validate_runtime_tool("${SDK_ROOT}/bin/ffprobe" "ffprobe")
     validate_runtime_muxer("${SDK_ROOT}/bin/ffmpeg" "f32le")
     validate_raw_pcm_capabilities("${SDK_ROOT}/bin/ffmpeg")
+    validate_stem_export_filters("${SDK_ROOT}/bin/ffmpeg")
     validate_software_runtime_capabilities("${SDK_ROOT}/bin/ffmpeg")
     validate_raw_pcm_transcodes(
+        "${SDK_ROOT}/bin/ffmpeg"
+        "${SDK_ROOT}/bin/ffprobe"
+        "${SDK_PLATFORM}-${SDK_ARCH}")
+    validate_ai_stem_export(
         "${SDK_ROOT}/bin/ffmpeg"
         "${SDK_ROOT}/bin/ffprobe"
         "${SDK_PLATFORM}-${SDK_ARCH}")
@@ -281,8 +312,13 @@ elseif(SDK_PLATFORM STREQUAL "windows")
         validate_runtime_tool("${SDK_ROOT}/bin/ffprobe.exe" "ffprobe.exe")
         validate_runtime_muxer("${SDK_ROOT}/bin/ffmpeg.exe" "f32le")
         validate_raw_pcm_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
+        validate_stem_export_filters("${SDK_ROOT}/bin/ffmpeg.exe")
         validate_software_runtime_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
         validate_raw_pcm_transcodes(
+            "${SDK_ROOT}/bin/ffmpeg.exe"
+            "${SDK_ROOT}/bin/ffprobe.exe"
+            "${SDK_PLATFORM}-${SDK_ARCH}")
+        validate_ai_stem_export(
             "${SDK_ROOT}/bin/ffmpeg.exe"
             "${SDK_ROOT}/bin/ffprobe.exe"
             "${SDK_PLATFORM}-${SDK_ARCH}")

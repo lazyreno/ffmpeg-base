@@ -12,6 +12,7 @@ set(vcpkg_configuration "${repo_root}/vcpkg-configuration.json")
 set(matrix_script "${repo_root}/scripts/generate-github-matrix.py")
 set(artifact_index_script "${repo_root}/scripts/generate-artifact-index.py")
 set(raw_pcm_validator "${repo_root}/scripts/validate-raw-pcm-transcode.py")
+set(ai_stem_export_validator "${repo_root}/scripts/validate-ai-stem-export.py")
 set(macos_build_script "${repo_root}/scripts/build-macos.sh")
 set(windows_build_script "${repo_root}/scripts/build-windows-msvc.ps1")
 set(stage_script "${repo_root}/scripts/stage-sdk.sh")
@@ -32,6 +33,7 @@ foreach(required_file IN ITEMS
     "${matrix_script}"
     "${artifact_index_script}"
     "${raw_pcm_validator}"
+    "${ai_stem_export_validator}"
     "${macos_build_script}"
     "${windows_build_script}"
     "${stage_script}"
@@ -55,6 +57,7 @@ file(READ "${vcpkg_configuration}" vcpkg_configuration_content)
 file(READ "${matrix_script}" matrix_script_content)
 file(READ "${artifact_index_script}" artifact_index_script_content)
 file(READ "${raw_pcm_validator}" raw_pcm_validator_content)
+file(READ "${ai_stem_export_validator}" ai_stem_export_validator_content)
 file(READ "${macos_build_script}" macos_build_script_content)
 file(READ "${windows_build_script}" windows_build_script_content)
 file(READ "${stage_script}" stage_script_content)
@@ -577,6 +580,40 @@ require_contains(
   "${validate_script_content}"
   "\\$\\{SDK_PLATFORM\\}-\\$\\{SDK_ARCH\\}"
   "Staged SDK validation must pass the exact platform and architecture to diagnostics")
+require_contains(
+  "${workflow_content}"
+  "python3 -m unittest tests/python/test_validate_ai_stem_export\\.py -v"
+  "Prepare matrix must run AI stem export validator unit tests")
+
+foreach(ai_stem_export_validator_marker IN ITEMS
+    "build_filter_complex"
+    "adelay="
+    "volume="
+    "aformat="
+    "pan="
+    "amix="
+    "duration=longest"
+    "validate_probe_payload"
+    "--platform"
+    "format_failure_diagnostics"
+    "Validated AI stem export filter graph")
+  require_contains(
+    "${ai_stem_export_validator_content}"
+    "${ai_stem_export_validator_marker}"
+    "AI stem export validator is missing marker: ${ai_stem_export_validator_marker}")
+endforeach()
+
+foreach(ai_stem_export_runtime_marker IN ITEMS
+    "validate_stem_export_filters"
+    "foreach\\(audio_filter IN ITEMS adelay aformat amix aresample pan volume\\)"
+    "validate_ai_stem_export"
+    "validate-ai-stem-export\\.py")
+  require_contains(
+    "${validate_script_content}"
+    "${ai_stem_export_runtime_marker}"
+    "Staged SDK validation is missing AI stem export marker: ${ai_stem_export_runtime_marker}")
+endforeach()
+
 require_not_contains("${validate_script_content}" "windows-\\$\\{SDK_ARCH\\}-msvc" "SDK validation must not derive legacy custom Windows triplets")
 require_not_contains("${validate_script_content}" "macos-\\$\\{SDK_ARCH\\}" "SDK validation must not derive legacy custom macOS triplets")
 
