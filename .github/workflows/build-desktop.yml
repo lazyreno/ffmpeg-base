@@ -65,6 +65,7 @@ jobs:
           python3 -m json.tool vcpkg-configuration.json >/dev/null
           python3 -m unittest tests/python/test_validate_ai_stem_export.py -v
           python3 -m unittest tests/python/test_validate_raw_pcm_transcode.py -v
+          cmake -P tests/cmake/test_validate_ffmpeg_components.cmake
           cmake -P tests/cmake/test_release_workflow.cmake
 
       - name: Generate build matrix

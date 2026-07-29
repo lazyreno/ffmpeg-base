@@ -5,7 +5,8 @@ if(NOT DEFINED SOURCE_DIR OR SOURCE_DIR STREQUAL "")
 endif()
 
 function(require_registry_symbol registry_path registry_content symbol description)
-    if(NOT "${registry_content}" MATCHES "${symbol}")
+    if(NOT "${registry_content}" MATCHES
+            "(^|\n)[ \t]*&${symbol},[ \t]*(\r?\n|$)")
         message(FATAL_ERROR
             "FFmpeg configure did not register ${description} (${symbol}) in ${registry_path}")
     endif()

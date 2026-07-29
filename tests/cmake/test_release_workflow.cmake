@@ -584,6 +584,10 @@ require_contains(
   "${workflow_content}"
   "python3 -m unittest tests/python/test_validate_ai_stem_export\\.py -v"
   "Prepare matrix must run AI stem export validator unit tests")
+require_contains(
+  "${workflow_content}"
+  "cmake -P tests/cmake/test_validate_ffmpeg_components\\.cmake"
+  "Prepare matrix must run exact FFmpeg component registry tests")
 
 foreach(ai_stem_export_validator_marker IN ITEMS
     "build_filter_complex"
