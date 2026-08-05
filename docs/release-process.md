@@ -8,10 +8,10 @@ The first public test flow uses GitHub Releases from the personal `ffmpeg-base` 
 4. Install codec dependencies through vcpkg manifest mode using `vcpkg.json`, `vcpkg-configuration.json`, and the platform triplet under `triplets/`.
 5. Generate the GitHub Actions matrix from `config/platform-matrix.json` with `scripts/generate-github-matrix.py`.
 6. Assemble each SDK into the standard layout documented in `docs/sdk-layout.md`.
-7. Generate `manifest.json` from `templates/manifest.json.in`, including the FFmpeg source URL, source SHA256, and feature list loaded from `config/ffmpeg-profile.json`.
+7. Generate `manifest.json` from `templates/manifest.json.in`, including the FFmpeg source URL, source SHA256, feature list, `profile`, and `minimumSystemVersion` loaded from the platform declaration.
 8. Archive the SDK as `ffmpeg-sdk-{ffmpegVersion}-v{sdkVersion}-{platform}.{archiveExt}`.
 9. Compute SHA256 for each archive.
-10. Generate `artifact-index.json` with `scripts/generate-artifact-index.py`.
+10. Generate schema v2 `artifact-index.json` with `scripts/generate-artifact-index.py`; every artifact carries the same `profile` and `minimumSystemVersion` declared in `config/platform-matrix.json` and its `manifest.json`.
 11. Publish the SDK either by manually running `.github/workflows/build-desktop.yml` or by pushing a protected `v{sdkVersion}` tag. Both paths upload archives plus `artifact-index.json` to a GitHub Release tagged `v{sdkVersion}` and titled `FFmpeg SDK {ffmpegVersion} v{sdkVersion}`.
 12. Update the client declaration file with the GitHub Release `artifact-index.json` URL and expected SDK version.
 
@@ -25,6 +25,6 @@ The workflow starts with `prepare-matrix`, which validates declarations and gene
 
 Windows ARM64 SDKs are cross-built on an x64 Windows runner. The workflow does not execute ARM64 `ffmpeg.exe` or `ffprobe.exe` on that runner; instead, layout validation performs static checks for required import libraries, FFmpeg DLLs, third-party runtime DLLs, manifest metadata, and license files. Windows x86_64 and macOS SDKs still execute `ffmpeg -version` and `ffprobe -version` during validation.
 
-`main` push builds keep uploading a short-lived workflow artifact for CI inspection, but they do not publish a GitHub Release.
+`main` push builds keep uploading a short-lived workflow artifact for CI inspection, but they do not publish a GitHub Release. macOS SDK builds validate every staged Mach-O in `bin/` and `lib/` with `vtool -show-build`; the value must not exceed the platform declaration. Windows SDK builds validate every staged `.exe` and `.dll` with `dumpbin /headers`; Windows x64 legacy artifacts must not exceed PE subsystem version 6.01. These static checks do not replace the Windows 7 SP1 VM runtime record required before release acceptance.
 
 Manual `workflow_dispatch` runs and `v*` tag pushes publish a GitHub Release after all desktop artifacts are built. Tag-triggered releases must match `v{sdkVersion}` from `config/sdk-version.json`; the workflow rejects mismatched tags and existing releases so a published SDK cannot be replaced silently. The publish job uses a `sdkVersion` concurrency group, so two release attempts for the same SDK batch cannot publish at the same time. The release also includes `artifact-index.json`, which lets clients resolve the correct platform archive URL and checksum without hard-coding every asset URL.

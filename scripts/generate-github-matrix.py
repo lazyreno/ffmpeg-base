@@ -10,6 +10,8 @@ REQUIRED_PLATFORM_KEYS = {
     "key",
     "os",
     "arch",
+    "profile",
+    "minimumSystemVersion",
     "buildFamily",
     "runner",
     "triplet",
@@ -32,6 +34,9 @@ def validate_platform(platform):
         raise SystemExit(f"{platform['key']} has unsupported buildFamily: {platform['buildFamily']}")
     if platform["buildFamily"] == "windows-msvc" and not platform.get("msvcArch"):
         raise SystemExit(f"{platform['key']} must declare msvcArch")
+    for field in ("profile", "minimumSystemVersion"):
+        if not isinstance(platform[field], str) or not platform[field]:
+            raise SystemExit(f"{platform['key']} {field} must be a non-empty string")
     if not TRIPLET_PATTERN.fullmatch(platform["triplet"]):
         raise SystemExit(
             f"{platform['key']} triplet must use lowercase letters, digits, and hyphens: "

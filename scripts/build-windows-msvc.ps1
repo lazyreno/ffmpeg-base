@@ -9,7 +9,8 @@ switch ($SdkArch) {
     "x86_64" {
         $FfmpegArch = "x86_64"
         $FfmpegCrossCompileFlag = ""
-        $FfmpegTargetCflags = ""
+        $FfmpegTargetCflags = "-D_WIN32_WINNT=0x0601 -DWINVER=0x0601 -DNTDDI_VERSION=0x06010000"
+        $FfmpegTargetLdflags = "/SUBSYSTEM:CONSOLE,6.01"
         $FfmpegAssemblyFlag = "--disable-x86asm"
         $VcpkgTriplet = "x64-windows"
     }
@@ -17,6 +18,7 @@ switch ($SdkArch) {
         $FfmpegArch = "aarch64"
         $FfmpegCrossCompileFlag = "--enable-cross-compile"
         $FfmpegTargetCflags = "--target=arm64-windows"
+        $FfmpegTargetLdflags = ""
         $FfmpegAssemblyFlag = "--disable-asm"
         $VcpkgTriplet = "arm64-windows"
     }
@@ -26,6 +28,16 @@ switch ($SdkArch) {
 }
 
 $PlatformKey = "windows-$SdkArch"
+$PlatformMatrix = Get-Content "config/platform-matrix.json" -Raw | ConvertFrom-Json
+$PlatformDeclaration = @($PlatformMatrix.platforms | Where-Object { $_.key -eq $PlatformKey })
+if ($PlatformDeclaration.Count -ne 1) {
+    throw "config/platform-matrix.json must declare exactly one entry for $PlatformKey"
+}
+$ArtifactProfile = $PlatformDeclaration[0].profile
+$MinimumSystemVersion = $PlatformDeclaration[0].minimumSystemVersion
+if ([string]::IsNullOrWhiteSpace($ArtifactProfile) -or [string]::IsNullOrWhiteSpace($MinimumSystemVersion)) {
+    throw "$PlatformKey must declare non-empty profile and minimumSystemVersion"
+}
 $BuildRoot = if ($env:BUILD_ROOT) { $env:BUILD_ROOT } else { Join-Path $RootDir "build/$PlatformKey" }
 $DistDir = if ($env:DIST_DIR) { $env:DIST_DIR } else { Join-Path $RootDir "dist" }
 
@@ -201,7 +213,7 @@ if ! ./configure \
   --arch='$FfmpegArch' \
   $FfmpegCrossCompileFlag \
   --extra-cflags='$FfmpegTargetCflags -I$VcpkgDependencyRootForMsvc/include' \
-  --extra-ldflags='dxguid.lib /libpath:$LibAliasDirForMsvc /libpath:$VcpkgDependencyRootForMsvc/lib' \
+  --extra-ldflags='$FfmpegTargetLdflags dxguid.lib /libpath:$LibAliasDirForMsvc /libpath:$VcpkgDependencyRootForMsvc/lib' \
   $FfmpegAssemblyFlag \
 $FfmpegProfileConfigureArgs
   ; then
@@ -253,6 +265,15 @@ if ($LASTEXITCODE -ne 0) {
     throw "Windows SDK staging failed"
 }
 
+$Dumpbin = (Get-Command dumpbin -ErrorAction Stop).Path
+& python "$RootDir/scripts/validate-windows-sdk-subsystem.py" `
+    --sdk-root "$SdkRoot" `
+    --maximum-subsystem-version "$MinimumSystemVersion" `
+    --dumpbin "$Dumpbin"
+if ($LASTEXITCODE -ne 0) {
+    throw "Windows SDK PE subsystem validation failed"
+}
+
 cmake `
     -D "TEMPLATE_FILE=$RootDir/templates/manifest.json.in" `
     -D "OUTPUT_FILE=$SdkRoot/manifest.json" `
@@ -260,6 +281,8 @@ cmake `
     -D "FFMPEG_VERSION=$FfmpegVersion" `
     -D "SDK_PLATFORM=windows" `
     -D "SDK_ARCH=$SdkArch" `
+    -D "ARTIFACT_PROFILE=$ArtifactProfile" `
+    -D "MINIMUM_SYSTEM_VERSION=$MinimumSystemVersion" `
     -D "SDK_COMPILER=$(& clang-cl --version 2>&1 | Select-Object -First 1)" `
     -D "VCPKG_BASELINE=$VcpkgBaseline" `
     -D "VCPKG_TRIPLET=$VcpkgTriplet" `

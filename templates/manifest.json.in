@@ -4,6 +4,8 @@
   "ffmpegVersion": "@FFMPEG_VERSION@",
   "platform": "@SDK_PLATFORM@",
   "arch": "@SDK_ARCH@",
+  "profile": "@ARTIFACT_PROFILE@",
+  "minimumSystemVersion": "@MINIMUM_SYSTEM_VERSION@",
   "compiler": "@SDK_COMPILER@",
   "vcpkgBaseline": "@VCPKG_BASELINE@",
   "vcpkgTriplet": "@VCPKG_TRIPLET@",

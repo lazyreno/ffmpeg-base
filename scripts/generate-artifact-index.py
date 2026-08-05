@@ -51,6 +51,8 @@ def main():
 
         artifacts.append({
             "platform": platform["key"],
+            "profile": platform["profile"],
+            "minimumSystemVersion": platform["minimumSystemVersion"],
             "os": platform["os"],
             "arch": platform["arch"],
             "triplet": platform["triplet"],
@@ -63,7 +65,7 @@ def main():
         })
 
     index = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "name": "ffmpeg-base",
         "sdkVersion": sdk["sdkVersion"],
         "ffmpegVersion": sdk["ffmpegVersion"],

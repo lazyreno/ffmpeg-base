@@ -25,7 +25,7 @@ if [[ "${HOST_ARCH}" != "${SDK_ARCH}" ]]; then
 fi
 
 PLATFORM_KEY="macos-${SDK_ARCH}"
-VCPKG_TRIPLET="$(python3 - "${PLATFORM_KEY}" <<'PY'
+PLATFORM_METADATA="$(python3 - "${PLATFORM_KEY}" <<'PY'
 import json
 import sys
 
@@ -34,12 +34,20 @@ with open("config/platform-matrix.json", "r", encoding="utf-8") as handle:
     matrix = json.load(handle)
 for platform in matrix["platforms"]:
     if platform["key"] == platform_key:
-        print(platform["triplet"])
+        for field in ("triplet", "profile", "minimumSystemVersion"):
+            if not isinstance(platform.get(field), str) or not platform[field]:
+                raise SystemExit(f"{platform_key} must declare a non-empty {field}")
+        print("\t".join((
+            platform["triplet"],
+            platform["profile"],
+            platform["minimumSystemVersion"],
+        )))
         break
 else:
     raise SystemExit(f"Missing platform matrix entry for {platform_key}")
 PY
 )"
+IFS=$'\t' read -r VCPKG_TRIPLET ARTIFACT_PROFILE MINIMUM_SYSTEM_VERSION <<< "${PLATFORM_METADATA}"
 BUILD_ROOT="${BUILD_ROOT:-${ROOT_DIR}/build/${PLATFORM_KEY}}"
 DIST_DIR="${DIST_DIR:-${ROOT_DIR}/dist}"
 SDK_VERSION="$(python3 -c 'import json; print(json.load(open("config/sdk-version.json"))["sdkVersion"])' < /dev/null)"
@@ -81,7 +89,11 @@ SDK_PARENT_DIR="${BUILD_ROOT}/sdk"
 SDK_DIR_NAME="ffmpeg-sdk-${FFMPEG_VERSION}-v${SDK_VERSION}-${PLATFORM_KEY}"
 SDK_ROOT="${SDK_PARENT_DIR}/${SDK_DIR_NAME}"
 ARCHIVE_PATH="${DIST_DIR}/${SDK_DIR_NAME}.zip"
-MACOS_MIN_VERSION="${MACOS_MIN_VERSION:-11.0}"
+MACOS_MIN_VERSION="${MACOS_MIN_VERSION:-${MINIMUM_SYSTEM_VERSION}}"
+if [[ "${MACOS_MIN_VERSION}" != "${MINIMUM_SYSTEM_VERSION}" ]]; then
+  echo "MACOS_MIN_VERSION must match ${PLATFORM_KEY} minimumSystemVersion ${MINIMUM_SYSTEM_VERSION}." >&2
+  exit 1
+fi
 export MACOSX_DEPLOYMENT_TARGET="${MACOS_MIN_VERSION}"
 
 VCPKG_ROOT="${VCPKG_ROOT:-${VCPKG_INSTALLATION_ROOT:-}}"
@@ -193,6 +205,18 @@ popd >/dev/null
   --platform macos \
   --arch "${SDK_ARCH}"
 
+FILE_TOOL="$(command -v file)"
+VTOOL_EXECUTABLE="$(command -v vtool)"
+if [[ -z "${FILE_TOOL}" || -z "${VTOOL_EXECUTABLE}" ]]; then
+  echo "file and vtool are required to validate macOS SDK minimum system versions." >&2
+  exit 1
+fi
+python3 "${ROOT_DIR}/scripts/validate-macos-sdk-minos.py" \
+  --sdk-root "${SDK_ROOT}" \
+  --minimum-system-version "${MINIMUM_SYSTEM_VERSION}" \
+  --file-tool "${FILE_TOOL}" \
+  --vtool "${VTOOL_EXECUTABLE}"
+
 cmake \
   -D TEMPLATE_FILE="${ROOT_DIR}/templates/manifest.json.in" \
   -D OUTPUT_FILE="${SDK_ROOT}/manifest.json" \
@@ -200,6 +224,8 @@ cmake \
   -D FFMPEG_VERSION="${FFMPEG_VERSION}" \
   -D SDK_PLATFORM="macos" \
   -D SDK_ARCH="${SDK_ARCH}" \
+  -D ARTIFACT_PROFILE="${ARTIFACT_PROFILE}" \
+  -D MINIMUM_SYSTEM_VERSION="${MINIMUM_SYSTEM_VERSION}" \
   -D SDK_COMPILER="$(clang --version | head -n 1)" \
   -D VCPKG_BASELINE="${VCPKG_BASELINE}" \
   -D VCPKG_TRIPLET="${VCPKG_TRIPLET}" \

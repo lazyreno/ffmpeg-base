@@ -65,6 +65,9 @@ jobs:
           python3 -m json.tool vcpkg-configuration.json >/dev/null
           python3 -m unittest tests/python/test_validate_ai_stem_export.py -v
           python3 -m unittest tests/python/test_validate_raw_pcm_transcode.py -v
+          python3 -m unittest tests/python/test_validate_macos_sdk_minos.py -v
+          python3 -m unittest tests/python/test_validate_windows_sdk_subsystem.py -v
+          cmake -P tests/cmake/test_manifest_metadata.cmake
           cmake -P tests/cmake/test_validate_ffmpeg_components.cmake
           cmake -P tests/cmake/test_release_workflow.cmake
 
@@ -99,6 +102,7 @@ jobs:
           uname -a
           clang --version
           cmake --version
+          command -v vtool
 
       - name: Setup MSYS2
         if: matrix.buildFamily == 'windows-msvc'

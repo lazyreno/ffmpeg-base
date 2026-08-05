@@ -331,6 +331,7 @@ file(READ "${SDK_ROOT}/manifest.json" manifest_json)
 set(repo_root "${CMAKE_CURRENT_LIST_DIR}/..")
 file(READ "${repo_root}/config/sdk-version.json" sdk_version_json)
 file(READ "${repo_root}/config/source-lock.json" source_lock_json)
+file(READ "${repo_root}/config/platform-matrix.json" platform_matrix_json)
 
 function(require_manifest_string key)
     string(JSON manifest_value ERROR_VARIABLE manifest_error GET "${manifest_json}" "${key}")
@@ -358,6 +359,8 @@ foreach(required_json_key IN ITEMS
         ffmpegVersion
         platform
         arch
+        profile
+        minimumSystemVersion
         compiler
         vcpkgBaseline
         vcpkgTriplet
@@ -376,12 +379,32 @@ string(JSON expected_vcpkg_baseline GET "${sdk_version_json}" vcpkgBaseline)
 string(JSON expected_license_mode GET "${sdk_version_json}" licenseMode)
 string(JSON expected_source_url GET "${source_lock_json}" url)
 string(JSON expected_source_sha256 GET "${source_lock_json}" sha256)
+set(expected_platform_key "${SDK_PLATFORM}-${SDK_ARCH}")
+string(JSON platform_count LENGTH "${platform_matrix_json}" platforms)
+set(expected_artifact_profile "")
+set(expected_minimum_system_version "")
+if(platform_count GREATER 0)
+    math(EXPR last_platform_index "${platform_count} - 1")
+    foreach(platform_index RANGE 0 ${last_platform_index})
+        string(JSON platform_key GET "${platform_matrix_json}" platforms ${platform_index} key)
+        if(platform_key STREQUAL expected_platform_key)
+            string(JSON expected_artifact_profile GET "${platform_matrix_json}" platforms ${platform_index} profile)
+            string(JSON expected_minimum_system_version GET "${platform_matrix_json}" platforms ${platform_index} minimumSystemVersion)
+            break()
+        endif()
+    endforeach()
+endif()
+if(expected_artifact_profile STREQUAL "" OR expected_minimum_system_version STREQUAL "")
+    message(FATAL_ERROR "Platform matrix is missing metadata for ${expected_platform_key}")
+endif()
 
 require_manifest_equals("name" "ffmpeg-base")
 require_manifest_equals("sdkVersion" "${expected_sdk_version}")
 require_manifest_equals("ffmpegVersion" "${expected_ffmpeg_version}")
 require_manifest_equals("platform" "${SDK_PLATFORM}")
 require_manifest_equals("arch" "${SDK_ARCH}")
+require_manifest_equals("profile" "${expected_artifact_profile}")
+require_manifest_equals("minimumSystemVersion" "${expected_minimum_system_version}")
 require_manifest_equals("vcpkgBaseline" "${expected_vcpkg_baseline}")
 require_manifest_equals("vcpkgTriplet" "${VCPKG_TRIPLET}")
 require_manifest_equals("ffmpegSourceUrl" "${expected_source_url}")

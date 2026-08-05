@@ -7,6 +7,8 @@ foreach(required_var IN ITEMS
         FFMPEG_VERSION
         SDK_PLATFORM
         SDK_ARCH
+        ARTIFACT_PROFILE
+        MINIMUM_SYSTEM_VERSION
         SDK_COMPILER
         VCPKG_BASELINE
         VCPKG_TRIPLET

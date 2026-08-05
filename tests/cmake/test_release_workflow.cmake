@@ -13,6 +13,11 @@ set(matrix_script "${repo_root}/scripts/generate-github-matrix.py")
 set(artifact_index_script "${repo_root}/scripts/generate-artifact-index.py")
 set(raw_pcm_validator "${repo_root}/scripts/validate-raw-pcm-transcode.py")
 set(ai_stem_export_validator "${repo_root}/scripts/validate-ai-stem-export.py")
+set(macos_minos_validator "${repo_root}/scripts/validate-macos-sdk-minos.py")
+set(macos_minos_test "${repo_root}/tests/python/test_validate_macos_sdk_minos.py")
+set(windows_subsystem_validator "${repo_root}/scripts/validate-windows-sdk-subsystem.py")
+set(windows_subsystem_test "${repo_root}/tests/python/test_validate_windows_sdk_subsystem.py")
+set(manifest_metadata_test "${repo_root}/tests/cmake/test_manifest_metadata.cmake")
 set(macos_build_script "${repo_root}/scripts/build-macos.sh")
 set(windows_build_script "${repo_root}/scripts/build-windows-msvc.ps1")
 set(stage_script "${repo_root}/scripts/stage-sdk.sh")
@@ -34,6 +39,11 @@ foreach(required_file IN ITEMS
     "${artifact_index_script}"
     "${raw_pcm_validator}"
     "${ai_stem_export_validator}"
+    "${macos_minos_validator}"
+    "${macos_minos_test}"
+    "${windows_subsystem_validator}"
+    "${windows_subsystem_test}"
+    "${manifest_metadata_test}"
     "${macos_build_script}"
     "${windows_build_script}"
     "${stage_script}"
@@ -58,6 +68,11 @@ file(READ "${matrix_script}" matrix_script_content)
 file(READ "${artifact_index_script}" artifact_index_script_content)
 file(READ "${raw_pcm_validator}" raw_pcm_validator_content)
 file(READ "${ai_stem_export_validator}" ai_stem_export_validator_content)
+file(READ "${macos_minos_validator}" macos_minos_validator_content)
+file(READ "${macos_minos_test}" macos_minos_test_content)
+file(READ "${windows_subsystem_validator}" windows_subsystem_validator_content)
+file(READ "${windows_subsystem_test}" windows_subsystem_test_content)
+file(READ "${manifest_metadata_test}" manifest_metadata_test_content)
 file(READ "${macos_build_script}" macos_build_script_content)
 file(READ "${windows_build_script}" windows_build_script_content)
 file(READ "${stage_script}" stage_script_content)
@@ -88,8 +103,8 @@ string(JSON source_lock_sha256 GET "${source_lock_content}" sha256)
 string(JSON vcpkg_lock_repository GET "${vcpkg_lock_content}" repository)
 string(JSON vcpkg_lock_commit GET "${vcpkg_lock_content}" commit)
 
-if(NOT sdk_version STREQUAL "20260729.1")
-  message(FATAL_ERROR "SDK version must identify the AI stem export filter release 20260729.1")
+if(NOT sdk_version MATCHES "^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\\.[0-9]+$")
+  message(FATAL_ERROR "SDK version must use the immutable YYYYMMDD.N release format")
 endif()
 if(NOT ffmpeg_version STREQUAL "8.1.2")
   message(FATAL_ERROR "SDK must lock FFmpeg 8.1.2 until a deliberate version bump")
@@ -179,14 +194,35 @@ foreach(platform_field IN ITEMS
     "\"buildFamily\""
     "\"runner\""
     "\"triplet\""
-    "\"archiveExt\"")
+    "\"archiveExt\""
+    "\"profile\""
+    "\"minimumSystemVersion\"")
   require_contains("${platform_content}" "${platform_field}" "Platform matrix must own platform field ${platform_field}")
 endforeach()
 require_contains("${platform_content}" "\"msvcArch\"" "Windows platform entries must declare msvcArch")
+foreach(legacy_platform_metadata IN ITEMS
+    "\"key\"[ \t\r\n]*:[ \t\r\n]*\"windows-x86_64\"[^}]*\"profile\"[ \t\r\n]*:[ \t\r\n]*\"legacy\"[^}]*\"minimumSystemVersion\"[ \t\r\n]*:[ \t\r\n]*\"6.1\""
+    "\"key\"[ \t\r\n]*:[ \t\r\n]*\"macos-arm64\"[^}]*\"profile\"[ \t\r\n]*:[ \t\r\n]*\"legacy\"[^}]*\"minimumSystemVersion\"[ \t\r\n]*:[ \t\r\n]*\"11.0\""
+    "\"key\"[ \t\r\n]*:[ \t\r\n]*\"macos-x86_64\"[^}]*\"profile\"[ \t\r\n]*:[ \t\r\n]*\"legacy\"[^}]*\"minimumSystemVersion\"[ \t\r\n]*:[ \t\r\n]*\"11.0\"")
+  require_contains("${platform_content}" "${legacy_platform_metadata}" "Platform matrix must declare required legacy metadata")
+endforeach()
 require_contains(
   "${workflow_content}"
   "python3 -m unittest tests/python/test_validate_raw_pcm_transcode\\.py -v"
   "Prepare matrix must run raw PCM validator unit tests before platform builds")
+require_contains(
+  "${workflow_content}"
+  "cmake -P tests/cmake/test_manifest_metadata\\.cmake"
+  "Prepare matrix must validate generated manifest metadata before platform builds")
+require_contains(
+  "${workflow_content}"
+  "python3 -m unittest tests/python/test_validate_macos_sdk_minos\\.py -v"
+  "Prepare matrix must run macOS minimum-version validator tests before platform builds")
+require_contains(
+  "${workflow_content}"
+  "python3 -m unittest tests/python/test_validate_windows_sdk_subsystem\\.py -v"
+  "Prepare matrix must run Windows subsystem validator tests before platform builds")
+require_contains("${workflow_content}" "command -v vtool" "macOS runner must require vtool")
 
 require_not_contains("${platform_content}" "\"triplet\"[ \t\r\n]*:[ \t\r\n]*\"[^\"]*_[^\"]*\"" "vcpkg triplet names must not contain underscores")
 foreach(builtin_triplet IN ITEMS
@@ -315,7 +351,7 @@ endforeach()
 
 foreach(index_script_marker IN ITEMS
     "artifact-index.json"
-    "schemaVersion"
+    "\"schemaVersion\": 2"
     "releaseTag"
     "releaseChannel"
     "licenseMode"
@@ -324,6 +360,8 @@ foreach(index_script_marker IN ITEMS
     "ffmpegSourceUrl"
     "ffmpegSourceSha256"
     "platform-matrix.json"
+    "\"profile\""
+    "\"minimumSystemVersion\""
     "\"os\""
     "\"arch\""
     "\"triplet\""
@@ -331,6 +369,54 @@ foreach(index_script_marker IN ITEMS
     "\"sha256\""
     "\"size\"")
   require_contains("${artifact_index_script_content}" "${index_script_marker}" "Artifact index script is missing marker: ${index_script_marker}")
+endforeach()
+
+foreach(manifest_metadata_marker IN ITEMS
+    "ARTIFACT_PROFILE=legacy"
+    "MINIMUM_SYSTEM_VERSION=11.0"
+    "minimumSystemVersion")
+  require_contains("${manifest_metadata_test_content}" "${manifest_metadata_marker}" "Manifest metadata test is missing marker: ${manifest_metadata_marker}")
+endforeach()
+
+foreach(macos_minos_marker IN ITEMS
+    "--sdk-root"
+    "--minimum-system-version"
+    "--file-tool"
+    "--vtool"
+    "minos"
+    "Mach-O")
+  require_contains("${macos_minos_validator_content}" "${macos_minos_marker}" "macOS minos validator is missing marker: ${macos_minos_marker}")
+endforeach()
+foreach(macos_minos_test_marker IN ITEMS
+    "minos 11.0"
+    "minos 12.0"
+    "no build version")
+  require_contains("${macos_minos_test_content}" "${macos_minos_test_marker}" "macOS minos test is missing fixture: ${macos_minos_test_marker}")
+endforeach()
+require_contains("${macos_build_script_content}" "validate-macos-sdk-minos.py" "macOS build must run the minos validator")
+
+foreach(windows_subsystem_marker IN ITEMS
+    "--sdk-root"
+    "--maximum-subsystem-version"
+    "--dumpbin"
+    "subsystem version"
+    "\\.exe"
+    "\\.dll")
+  require_contains("${windows_subsystem_validator_content}" "${windows_subsystem_marker}" "Windows subsystem validator is missing marker: ${windows_subsystem_marker}")
+endforeach()
+foreach(windows_subsystem_test_marker IN ITEMS
+    "6.01 subsystem version"
+    "6.02 subsystem version"
+    "avcodec-62.dll")
+  require_contains("${windows_subsystem_test_content}" "${windows_subsystem_test_marker}" "Windows subsystem test is missing fixture: ${windows_subsystem_test_marker}")
+endforeach()
+foreach(windows_7_build_marker IN ITEMS
+    "_WIN32_WINNT=0x0601"
+    "WINVER=0x0601"
+    "/SUBSYSTEM:CONSOLE,6.01"
+    "Get-Command dumpbin"
+    "validate-windows-sdk-subsystem.py")
+  require_contains("${windows_build_script_content}" "${windows_7_build_marker}" "Windows x64 legacy build is missing marker: ${windows_7_build_marker}")
 endforeach()
 
 foreach(vcpkg_package IN ITEMS mp3lame libvpx aom opus libvorbis x264 x265)
