@@ -9,6 +9,8 @@ set(source_lock_file "${repo_root}/config/source-lock.json")
 set(vcpkg_lock_file "${repo_root}/config/vcpkg-lock.json")
 set(vcpkg_manifest "${repo_root}/vcpkg.json")
 set(vcpkg_configuration "${repo_root}/vcpkg-configuration.json")
+set(opencore_amr_portfile "${repo_root}/ports/opencore-amr/portfile.cmake")
+set(opencore_amr_port_manifest "${repo_root}/ports/opencore-amr/vcpkg.json")
 set(matrix_script "${repo_root}/scripts/generate-github-matrix.py")
 set(artifact_index_script "${repo_root}/scripts/generate-artifact-index.py")
 set(raw_pcm_validator "${repo_root}/scripts/validate-raw-pcm-transcode.py")
@@ -35,6 +37,8 @@ foreach(required_file IN ITEMS
     "${vcpkg_lock_file}"
     "${vcpkg_manifest}"
     "${vcpkg_configuration}"
+    "${opencore_amr_portfile}"
+    "${opencore_amr_port_manifest}"
     "${matrix_script}"
     "${artifact_index_script}"
     "${raw_pcm_validator}"
@@ -64,6 +68,8 @@ file(READ "${source_lock_file}" source_lock_content)
 file(READ "${vcpkg_lock_file}" vcpkg_lock_content)
 file(READ "${vcpkg_manifest}" vcpkg_manifest_content)
 file(READ "${vcpkg_configuration}" vcpkg_configuration_content)
+file(READ "${opencore_amr_portfile}" opencore_amr_portfile_content)
+file(READ "${opencore_amr_port_manifest}" opencore_amr_port_manifest_content)
 file(READ "${matrix_script}" matrix_script_content)
 file(READ "${artifact_index_script}" artifact_index_script_content)
 file(READ "${raw_pcm_validator}" raw_pcm_validator_content)
@@ -419,8 +425,21 @@ foreach(windows_7_build_marker IN ITEMS
   require_contains("${windows_build_script_content}" "${windows_7_build_marker}" "Windows x64 legacy build is missing marker: ${windows_7_build_marker}")
 endforeach()
 
-foreach(vcpkg_package IN ITEMS mp3lame libvpx aom opus libvorbis x264 x265)
-  require_contains("${vcpkg_manifest_content}" "\"${vcpkg_package}\"" "vcpkg manifest must declare ${vcpkg_package}")
+foreach(vcpkg_package IN ITEMS mp3lame libvpx aom opus libvorbis x264 x265 opencore-amr)
+require_contains("${vcpkg_manifest_content}" "\"${vcpkg_package}\"" "vcpkg manifest must declare ${vcpkg_package}")
+endforeach()
+require_contains("${workflow_content}" "--overlay-ports" "SDK workflow must pass the OpenCORE-AMR overlay port directory to vcpkg")
+require_contains("${workflow_content}" "ports/\\*\\*" "SDK workflow must rebuild when the OpenCORE-AMR overlay port changes")
+require_contains("${opencore_amr_port_manifest_content}" "\"name\"[ \\t\\r\\n]*:[ \\t\\r\\n]*\"opencore-amr\"" "OpenCORE-AMR overlay port must use the opencore-amr name")
+require_contains("${opencore_amr_port_manifest_content}" "\"version-string\"[ \\t\\r\\n]*:[ \\t\\r\\n]*\"0\\.1\\.6\"" "OpenCORE-AMR overlay port must lock version 0.1.6")
+foreach(portfile_marker IN ITEMS
+    "vcpkg_download_distfile"
+    "opencore-amr_0\\.1\\.6\\.orig\\.tar\\.gz"
+    "8955169954b09d2d5e2190888602c75771b72455290db131ab7f40b587df32ea6a60f205126b09193b90064d0fd82b7d678032e2b4c684189788e175b83d0aa7"
+    "vcpkg_configure_make"
+    "vcpkg_install_make"
+    "vcpkg_install_copyright")
+  require_contains("${opencore_amr_portfile_content}" "${portfile_marker}" "OpenCORE-AMR overlay port is missing ${portfile_marker}")
 endforeach()
 
 foreach(profile_flag IN ITEMS
@@ -432,9 +451,12 @@ foreach(profile_flag IN ITEMS
     "--enable-libaom"
     "--enable-libopus"
     "--enable-libvorbis"
+    "--enable-version3"
+    "--enable-libopencore-amrnb"
     "--enable-demuxer=mov"
     "--enable-muxer=pcm_f32le"
     "--enable-muxer=mp4"
+    "--enable-muxer=amr"
     "--enable-decoder=h264"
     "--enable-parser=h264"
     "--enable-filter=scale"
@@ -442,11 +464,15 @@ foreach(profile_flag IN ITEMS
     "--enable-libx264"
     "--enable-libx265"
     "--enable-encoder=libx264"
-    "--enable-encoder=libx265")
+    "--enable-encoder=libx265"
+    "--enable-encoder=alac"
+    "--enable-encoder=libopencore_amrnb")
   require_contains("${profile_content}" "${profile_flag}" "FFmpeg profile is missing required configure flag: ${profile_flag}")
 endforeach()
 
-foreach(profile_feature IN ITEMS libx264 libx265 encoder-libx264 encoder-libx265)
+foreach(profile_feature IN ITEMS
+    libx264 libx265 encoder-libx264 encoder-libx265
+    encoder-alac libopencore-amrnb encoder-libopencore_amrnb muxer-amr)
   require_contains("${profile_content}" "\"${profile_feature}\"" "FFmpeg profile is missing required common feature: ${profile_feature}")
 endforeach()
 
@@ -489,7 +515,6 @@ require_not_contains(
   "FFmpeg profile must enable the pcm_f32le configure component")
 
 foreach(forbidden_flag IN ITEMS
-    "--enable-version3"
     "--enable-libdav1d"
     "--enable-libvmaf")
   require_not_contains("${profile_content}" "${forbidden_flag}" "FFmpeg software profile must not enable forbidden flag ${forbidden_flag}")
@@ -513,6 +538,9 @@ foreach(component_validator_marker IN ITEMS
     "libavcodec/codec_list.c"
     "libavfilter/filter_list.c"
     "ff_pcm_f32le_muxer"
+    "ff_amr_muxer"
+    "ff_alac_encoder"
+    "ff_libopencore_amrnb_encoder"
     "ff_libx264_encoder"
     "ff_libx265_encoder"
     "ff_h264_videotoolbox_encoder"
@@ -555,6 +583,13 @@ foreach(codec_dependency IN ITEMS x264 x265)
   require_contains("${macos_build_script_content}" "\\$\\{${codec_dependency_prefix}_PREFIX\\}" "macOS build must include the ${codec_dependency} prefix in FFmpeg search paths")
   require_contains("${windows_build_script_content}" "include/${codec_dependency}\\.h" "Windows build must validate the ${codec_dependency} vcpkg header")
 endforeach()
+require_contains("${macos_build_script_content}" "dependency_prefix OPENCORE_AMR_PREFIX opencore-amr include/opencore-amrnb/interf_enc\\.h" "macOS build must validate the OpenCORE-AMR vcpkg header")
+require_contains("${macos_build_script_content}" "\\$\\{OPENCORE_AMR_PREFIX\\}" "macOS build must include the OpenCORE-AMR prefix in FFmpeg search paths")
+require_contains("${windows_build_script_content}" "include/opencore-amrnb/interf_enc\\.h" "Windows build must validate the OpenCORE-AMR vcpkg header")
+require_contains("${windows_build_script_content}" "\\*opencore-amrnb\\*\\.dll" "Windows build must stage OpenCORE-AMR runtime DLLs")
+require_contains("${windows_build_script_content}" "opencore-amr" "Windows build must stage OpenCORE-AMR license metadata")
+require_contains("${stage_script_content}" "libopencore-amrnb\\*\\.dylib" "macOS staging must recognize OpenCORE-AMR runtime libraries")
+require_contains("${stage_script_content}" "LICENSE\\.opencore-amr\\.txt" "macOS staging must name the OpenCORE-AMR license file")
 require_contains("${macos_build_script_content}" "desktop GPL software SDK profile" "macOS dependency errors must identify the GPL software SDK profile")
 require_not_contains("${macos_build_script_content}" "desktop LGPL app SDK profile" "macOS dependency errors must not identify the retired LGPL app SDK profile")
 

@@ -1,0 +1,7 @@
+{
+  "name": "opencore-amr",
+  "version-string": "0.1.6",
+  "description": "OpenCORE Adaptive Multi-Rate Narrow-Band audio codec",
+  "homepage": "https://sourceforge.net/projects/opencore-amr/",
+  "license": "Apache-2.0"
+}

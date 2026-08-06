@@ -94,7 +94,7 @@ ad_hoc_sign_macos_runtime_files() {
 
 is_macos_external_dependency() {
   case "$1" in
-    libmp3lame*.dylib|libvpx*.dylib|libaom*.dylib|libopus*.dylib|libvorbis*.dylib|libogg*.dylib|libx264*.dylib|libx265*.dylib)
+    libmp3lame*.dylib|libvpx*.dylib|libaom*.dylib|libopus*.dylib|libvorbis*.dylib|libogg*.dylib|libopencore-amrnb*.dylib|libx264*.dylib|libx265*.dylib)
       return 0
       ;;
     *)
@@ -125,6 +125,7 @@ stage_macos_external_dependency() {
     libopus*.dylib) license_output_name="LICENSE.opus.txt"; package_name="opus" ;;
     libvorbis*.dylib) license_output_name="LICENSE.libvorbis.txt"; package_name="libvorbis" ;;
     libogg*.dylib) license_output_name="LICENSE.libogg.txt"; package_name="libogg" ;;
+    libopencore-amrnb*.dylib) license_output_name="LICENSE.opencore-amr.txt"; package_name="opencore-amr" ;;
     libx264*.dylib) license_output_name="LICENSE.x264.txt"; package_name="x264" ;;
     libx265*.dylib) license_output_name="LICENSE.x265.txt"; package_name="x265" ;;
     *) license_output_name=""; package_name="" ;;

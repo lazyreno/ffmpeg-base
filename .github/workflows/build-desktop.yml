@@ -13,6 +13,7 @@ on:
       - "templates/**"
       - "tests/**"
       - "triplets/**"
+      - "ports/**"
       - "vcpkg.json"
       - "vcpkg-configuration.json"
   push:
@@ -28,6 +29,7 @@ on:
       - "templates/**"
       - "tests/**"
       - "triplets/**"
+      - "ports/**"
       - "vcpkg.json"
       - "vcpkg-configuration.json"
 
@@ -208,6 +210,7 @@ jobs:
           "${{ github.workspace }}/.vcpkg-root/vcpkg" install \
             --vcpkg-root "${{ github.workspace }}/.vcpkg-root" \
             --triplet "${{ matrix.triplet }}" \
+            --overlay-ports "${{ github.workspace }}/ports" \
             --x-install-root "${{ github.workspace }}/.vcpkg-installed" \
             --clean-after-build
 
@@ -219,6 +222,7 @@ jobs:
           & "$vcpkgRoot\vcpkg.exe" install `
             --vcpkg-root "$vcpkgRoot" `
             --triplet "${{ matrix.triplet }}" `
+            --overlay-ports "${{ github.workspace }}\ports" `
             --x-install-root "${{ github.workspace }}/.vcpkg-installed" `
             --clean-after-build
           if ($LASTEXITCODE -ne 0) {

@@ -50,8 +50,17 @@ require_registry_symbol(
     "${muxer_list}" "${muxer_list_content}"
     "ff_pcm_f32le_muxer" "pcm_f32le muxer")
 require_registry_symbol(
+    "${muxer_list}" "${muxer_list_content}"
+    "ff_amr_muxer" "AMR muxer")
+require_registry_symbol(
     "${codec_list}" "${codec_list_content}"
     "ff_mjpeg_encoder" "MJPEG encoder")
+require_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
+    "ff_alac_encoder" "ALAC encoder")
+require_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
+    "ff_libopencore_amrnb_encoder" "OpenCORE AMR-NB encoder")
 require_registry_symbol(
     "${codec_list}" "${codec_list_content}"
     "ff_libx264_encoder" "libx264 encoder")
