@@ -4,7 +4,7 @@ set(repo_root "${CMAKE_CURRENT_LIST_DIR}/../..")
 set(validator "${repo_root}/scripts/validate-ffmpeg-components.cmake")
 set(test_root "${repo_root}/build/test-validate-ffmpeg-components")
 
-function(write_registry_fixture fixture_root volume_symbol)
+function(write_registry_fixture fixture_root volume_symbol include_alac include_amrnb include_amr_muxer)
     file(MAKE_DIRECTORY
         "${fixture_root}/libavformat"
         "${fixture_root}/libavcodec"
@@ -19,6 +19,11 @@ function(write_registry_fixture fixture_root volume_symbol)
     file(WRITE "${fixture_root}/libavformat/muxer_list.c" "
 &ff_pcm_f32le_muxer,
 ")
+    if(include_amr_muxer)
+        file(APPEND "${fixture_root}/libavformat/muxer_list.c" "
+&ff_amr_muxer,
+")
+    endif()
     file(WRITE "${fixture_root}/libavcodec/codec_list.c" "
 &ff_mjpeg_encoder,
 &ff_libx264_encoder,
@@ -32,6 +37,16 @@ function(write_registry_fixture fixture_root volume_symbol)
 &ff_pcm_f32le_decoder,
 &ff_pcm_f32le_encoder,
 ")
+    if(include_alac)
+        file(APPEND "${fixture_root}/libavcodec/codec_list.c" "
+&ff_alac_encoder,
+")
+    endif()
+    if(include_amrnb)
+        file(APPEND "${fixture_root}/libavcodec/codec_list.c" "
+&ff_libopencore_amrnb_encoder,
+")
+    endif()
     file(WRITE "${fixture_root}/libavfilter/filter_list.c" "
 &ff_af_adelay,
 &ff_af_aformat,
@@ -42,10 +57,31 @@ function(write_registry_fixture fixture_root volume_symbol)
 ")
 endfunction()
 
+function(expect_missing_registry_symbol fixture_root expected_diagnostic)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}"
+            "-DSOURCE_DIR=${fixture_root}"
+            -P "${validator}"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error
+    )
+    if(result EQUAL 0)
+        message(FATAL_ERROR
+            "Registry fixture missing ${expected_diagnostic} must fail validation")
+    endif()
+    set(diagnostics "${output}\n${error}")
+    string(FIND "${diagnostics}" "${expected_diagnostic}" diagnostic_offset)
+    if(diagnostic_offset EQUAL -1)
+        message(FATAL_ERROR
+            "Missing registry diagnostic must identify ${expected_diagnostic}:\n${diagnostics}")
+    endif()
+endfunction()
+
 file(REMOVE_RECURSE "${test_root}")
 
 set(valid_fixture "${test_root}/valid")
-write_registry_fixture("${valid_fixture}" "ff_af_volume")
+write_registry_fixture("${valid_fixture}" "ff_af_volume" TRUE TRUE TRUE)
 execute_process(
     COMMAND "${CMAKE_COMMAND}"
         "-DSOURCE_DIR=${valid_fixture}"
@@ -60,10 +96,31 @@ if(NOT valid_result EQUAL 0)
         "${valid_output}\n${valid_error}")
 endif()
 
+set(missing_alac_fixture "${test_root}/missing-alac")
+write_registry_fixture("${missing_alac_fixture}" "ff_af_volume" FALSE TRUE TRUE)
+expect_missing_registry_symbol(
+    "${missing_alac_fixture}"
+    "ff_alac_encoder")
+
+set(missing_amrnb_fixture "${test_root}/missing-amrnb")
+write_registry_fixture("${missing_amrnb_fixture}" "ff_af_volume" TRUE FALSE TRUE)
+expect_missing_registry_symbol(
+    "${missing_amrnb_fixture}"
+    "ff_libopencore_amrnb_encoder")
+
+set(missing_amr_muxer_fixture "${test_root}/missing-amr-muxer")
+write_registry_fixture("${missing_amr_muxer_fixture}" "ff_af_volume" TRUE TRUE FALSE)
+expect_missing_registry_symbol(
+    "${missing_amr_muxer_fixture}"
+    "ff_amr_muxer")
+
 set(substring_fixture "${test_root}/substring")
 write_registry_fixture(
     "${substring_fixture}"
-    "ff_af_volumedetect")
+    "ff_af_volumedetect"
+    TRUE
+    TRUE
+    TRUE)
 execute_process(
     COMMAND "${CMAKE_COMMAND}"
         "-DSOURCE_DIR=${substring_fixture}"

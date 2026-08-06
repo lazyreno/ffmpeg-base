@@ -128,6 +128,7 @@ LIBVPX_PREFIX="$(dependency_prefix LIBVPX_PREFIX libvpx include/vpx/vpx_encoder.
 LIBAOM_PREFIX="$(dependency_prefix LIBAOM_PREFIX aom include/aom/aom_encoder.h)"
 OPUS_PREFIX="$(dependency_prefix OPUS_PREFIX opus include/opus/opus.h)"
 LIBVORBIS_PREFIX="$(dependency_prefix LIBVORBIS_PREFIX libvorbis include/vorbis/codec.h)"
+OPENCORE_AMR_PREFIX="$(dependency_prefix OPENCORE_AMR_PREFIX opencore-amr include/opencore-amrnb/interf_enc.h)"
 X264_PREFIX="$(dependency_prefix X264_PREFIX x264 include/x264.h)"
 X265_PREFIX="$(dependency_prefix X265_PREFIX x265 include/x265.h)"
 
@@ -137,6 +138,7 @@ EXTERNAL_PREFIXES=(
   "${LIBAOM_PREFIX}"
   "${OPUS_PREFIX}"
   "${LIBVORBIS_PREFIX}"
+  "${OPENCORE_AMR_PREFIX}"
   "${X264_PREFIX}"
   "${X265_PREFIX}"
 )
@@ -196,6 +198,11 @@ cmake \
 
 make -j"$(sysctl -n hw.ncpu)"
 make install
+mkdir -p "${INSTALL_PREFIX}/licenses/opencore-amr"
+if [[ -f "${VCPKG_DEPENDENCY_ROOT}/share/opencore-amr/copyright" ]]; then
+  cp -p "${VCPKG_DEPENDENCY_ROOT}/share/opencore-amr/copyright" \
+    "${INSTALL_PREFIX}/licenses/opencore-amr/LICENSE"
+fi
 popd >/dev/null
 
 "${ROOT_DIR}/scripts/stage-sdk.sh" \
