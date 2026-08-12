@@ -159,6 +159,16 @@ endforeach()
 require_contains("${profile_content}" "\"encoder-mjpeg\"" "FFmpeg feature profile must declare the MJPEG encoder for JPG thumbnail output")
 require_contains("${profile_content}" "--enable-encoder=mjpeg" "FFmpeg configure options must enable the MJPEG encoder for JPG thumbnail output")
 
+foreach(video_to_mp3_component IN ITEMS
+    "muxer-aiff"
+    "encoder-pcm_s16be"
+    "encoder-wmav2"
+    "--enable-muxer=aiff"
+    "--enable-encoder=pcm_s16be"
+    "--enable-encoder=wmav2")
+  require_contains("${profile_content}" "${video_to_mp3_component}" "FFmpeg profile must declare Video to MP3 output component: ${video_to_mp3_component}")
+endforeach()
+
 foreach(pcm_format IN ITEMS s16le s24le s32le f32le)
   require_contains(
     "${profile_content}"
@@ -539,8 +549,11 @@ foreach(component_validator_marker IN ITEMS
     "libavfilter/filter_list.c"
     "ff_pcm_f32le_muxer"
     "ff_amr_muxer"
+    "ff_aiff_muxer"
     "ff_alac_encoder"
     "ff_libopencore_amrnb_encoder"
+    "ff_pcm_s16be_encoder"
+    "ff_wmav2_encoder"
     "ff_libx264_encoder"
     "ff_libx265_encoder"
     "ff_h264_videotoolbox_encoder"

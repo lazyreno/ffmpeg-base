@@ -53,6 +53,9 @@ require_registry_symbol(
     "${muxer_list}" "${muxer_list_content}"
     "ff_amr_muxer" "AMR muxer")
 require_registry_symbol(
+    "${muxer_list}" "${muxer_list_content}"
+    "ff_aiff_muxer" "AIFF muxer")
+require_registry_symbol(
     "${codec_list}" "${codec_list_content}"
     "ff_mjpeg_encoder" "MJPEG encoder")
 require_registry_symbol(
@@ -61,6 +64,12 @@ require_registry_symbol(
 require_registry_symbol(
     "${codec_list}" "${codec_list_content}"
     "ff_libopencore_amrnb_encoder" "OpenCORE AMR-NB encoder")
+require_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
+    "ff_pcm_s16be_encoder" "PCM S16BE encoder")
+require_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
+    "ff_wmav2_encoder" "Windows Media Audio v2 encoder")
 require_registry_symbol(
     "${codec_list}" "${codec_list_content}"
     "ff_libx264_encoder" "libx264 encoder")
