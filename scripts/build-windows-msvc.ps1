@@ -134,6 +134,15 @@ foreach ($WindowsSdkLibraryDir in @($WindowsSdkUcrtLibraryDir, $WindowsSdkUmLibr
         throw "Windows SDK library directory for $WindowsSdkLibraryArch was not found: $WindowsSdkLibraryDir"
     }
 }
+$WindowsSdkLibraryLink = Join-Path $BuildRoot "windows-sdk-lib"
+if (Test-Path -LiteralPath $WindowsSdkLibraryLink) {
+    $ExistingWindowsSdkLibraryLink = Get-Item -LiteralPath $WindowsSdkLibraryLink
+    if ($ExistingWindowsSdkLibraryLink.LinkType -ne "Junction") {
+        throw "Windows SDK library link path is occupied by a non-junction item: $WindowsSdkLibraryLink"
+    }
+    [System.IO.Directory]::Delete($WindowsSdkLibraryLink)
+}
+New-Item -ItemType Junction -Path $WindowsSdkLibraryLink -Target $WindowsSdkLibraryRoot | Out-Null
 
 $MsysNasmDir = ""
 if ($SdkArch -eq "x86_64") {
@@ -153,10 +162,9 @@ if ($SdkArch -eq "x86_64") {
 
 $VcpkgDependencyRootForMsvc = $VcpkgDependencyRoot.Replace("\", "/")
 $LibAliasDirForMsvc = $LibAliasDir.Replace("\", "/")
-$WindowsSdkUcrtLibraryDirForMsvc = $WindowsSdkUcrtLibraryDir.Replace("\", "/")
-$WindowsSdkUmLibraryDirForMsvc = $WindowsSdkUmLibraryDir.Replace("\", "/")
-$WindowsSdkUcrtLibraryFlag = "/libpath:`"$WindowsSdkUcrtLibraryDirForMsvc`""
-$WindowsSdkUmLibraryFlag = "/libpath:`"$WindowsSdkUmLibraryDirForMsvc`""
+$WindowsSdkLibraryLinkForMsvc = $WindowsSdkLibraryLink.Replace("\", "/")
+$WindowsSdkUcrtLibraryFlag = "/libpath:$WindowsSdkLibraryLinkForMsvc/ucrt/$WindowsSdkLibraryArch"
+$WindowsSdkUmLibraryFlag = "/libpath:$WindowsSdkLibraryLinkForMsvc/um/$WindowsSdkLibraryArch"
 
 if (!(Test-Path $VcpkgMsysToolsRoot)) {
     throw "vcpkg MSYS2 tools directory is required for pkg-config: $VcpkgMsysToolsRoot"
