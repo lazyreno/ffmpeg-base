@@ -121,6 +121,16 @@ if (!(Test-Path $ZlibImportLib)) {
     throw "z.lib from $VcpkgTriplet is required for FFmpeg zlib linking"
 }
 Copy-Item -Force $ZlibImportLib (Join-Path $LibAliasDir "zlib.lib")
+$WindowsSdkLibraryArch = if ($SdkArch -eq "x86_64") { "x64" } else { "arm64" }
+if ([string]::IsNullOrWhiteSpace($env:WindowsSdkDir) -or [string]::IsNullOrWhiteSpace($env:WindowsSDKLibVersion)) {
+    throw "Windows SDK library environment is required to locate dxguid.lib"
+}
+$WindowsSdkLibraryVersion = $env:WindowsSDKLibVersion.TrimEnd("\\")
+$DxguidImportLib = Join-Path $env:WindowsSdkDir "Lib\$WindowsSdkLibraryVersion\um\$WindowsSdkLibraryArch\dxguid.lib"
+if (!(Test-Path $DxguidImportLib)) {
+    throw "dxguid.lib for $WindowsSdkLibraryArch was not found in the configured Windows SDK: $DxguidImportLib"
+}
+Copy-Item -Force $DxguidImportLib (Join-Path $LibAliasDir "dxguid.lib")
 
 $MsysNasmDir = ""
 if ($SdkArch -eq "x86_64") {
@@ -240,7 +250,7 @@ if ! ./configure \
   --arch='$FfmpegArch' \
   $FfmpegCrossCompileFlag \
   --extra-cflags='$FfmpegTargetCflags -I$VcpkgDependencyRootForMsvc/include' \
-  --extra-ldflags='$FfmpegTargetLdflags dxguid.lib /libpath:$LibAliasDirForMsvc /libpath:$VcpkgDependencyRootForMsvc/lib' \
+  --extra-ldflags='$FfmpegTargetLdflags /libpath:$LibAliasDirForMsvc /libpath:$VcpkgDependencyRootForMsvc/lib dxguid.lib' \
   $FfmpegAssemblyFlag \
 $FfmpegProfileConfigureArgs
   ; then
