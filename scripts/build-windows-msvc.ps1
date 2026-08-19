@@ -123,14 +123,17 @@ if (!(Test-Path $ZlibImportLib)) {
 Copy-Item -Force $ZlibImportLib (Join-Path $LibAliasDir "zlib.lib")
 $WindowsSdkLibraryArch = if ($SdkArch -eq "x86_64") { "x64" } else { "arm64" }
 if ([string]::IsNullOrWhiteSpace($env:WindowsSdkDir) -or [string]::IsNullOrWhiteSpace($env:WindowsSDKLibVersion)) {
-    throw "Windows SDK library environment is required to locate dxguid.lib"
+    throw "Windows SDK library environment is required for FFmpeg linking"
 }
 $WindowsSdkLibraryVersion = $env:WindowsSDKLibVersion.TrimEnd("\\")
-$DxguidImportLib = Join-Path $env:WindowsSdkDir "Lib\$WindowsSdkLibraryVersion\um\$WindowsSdkLibraryArch\dxguid.lib"
-if (!(Test-Path $DxguidImportLib)) {
-    throw "dxguid.lib for $WindowsSdkLibraryArch was not found in the configured Windows SDK: $DxguidImportLib"
+$WindowsSdkLibraryRoot = Join-Path $env:WindowsSdkDir "Lib\$WindowsSdkLibraryVersion"
+$WindowsSdkUcrtLibraryDir = Join-Path $WindowsSdkLibraryRoot "ucrt\$WindowsSdkLibraryArch"
+$WindowsSdkUmLibraryDir = Join-Path $WindowsSdkLibraryRoot "um\$WindowsSdkLibraryArch"
+foreach ($WindowsSdkLibraryDir in @($WindowsSdkUcrtLibraryDir, $WindowsSdkUmLibraryDir)) {
+    if (!(Test-Path $WindowsSdkLibraryDir)) {
+        throw "Windows SDK library directory for $WindowsSdkLibraryArch was not found: $WindowsSdkLibraryDir"
+    }
 }
-Copy-Item -Force $DxguidImportLib (Join-Path $LibAliasDir "dxguid.lib")
 
 $MsysNasmDir = ""
 if ($SdkArch -eq "x86_64") {
@@ -150,6 +153,10 @@ if ($SdkArch -eq "x86_64") {
 
 $VcpkgDependencyRootForMsvc = $VcpkgDependencyRoot.Replace("\", "/")
 $LibAliasDirForMsvc = $LibAliasDir.Replace("\", "/")
+$WindowsSdkUcrtLibraryDirForMsvc = $WindowsSdkUcrtLibraryDir.Replace("\", "/")
+$WindowsSdkUmLibraryDirForMsvc = $WindowsSdkUmLibraryDir.Replace("\", "/")
+$WindowsSdkUcrtLibraryFlag = "/libpath:`"$WindowsSdkUcrtLibraryDirForMsvc`""
+$WindowsSdkUmLibraryFlag = "/libpath:`"$WindowsSdkUmLibraryDirForMsvc`""
 
 if (!(Test-Path $VcpkgMsysToolsRoot)) {
     throw "vcpkg MSYS2 tools directory is required for pkg-config: $VcpkgMsysToolsRoot"
@@ -250,7 +257,7 @@ if ! ./configure \
   --arch='$FfmpegArch' \
   $FfmpegCrossCompileFlag \
   --extra-cflags='$FfmpegTargetCflags -I$VcpkgDependencyRootForMsvc/include' \
-  --extra-ldflags='$FfmpegTargetLdflags /libpath:$LibAliasDirForMsvc /libpath:$VcpkgDependencyRootForMsvc/lib dxguid.lib' \
+  --extra-ldflags='$FfmpegTargetLdflags $WindowsSdkUcrtLibraryFlag $WindowsSdkUmLibraryFlag /libpath:$LibAliasDirForMsvc /libpath:$VcpkgDependencyRootForMsvc/lib' \
   $FfmpegAssemblyFlag \
 $FfmpegProfileConfigureArgs
   ; then
