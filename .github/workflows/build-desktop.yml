@@ -108,6 +108,7 @@ jobs:
 
       - name: Setup MSYS2
         if: matrix.buildFamily == 'windows-msvc'
+        id: msys2
         uses: msys2/setup-msys2@v2
         with:
           msystem: MSYS
@@ -177,7 +178,11 @@ jobs:
         if: matrix.buildFamily == 'windows-msvc' && matrix.arch == 'x86_64'
         shell: pwsh
         run: |
-          $msysNasm = 'C:\msys64\usr\bin\nasm.exe'
+          $msys2Location = '${{ steps.msys2.outputs.msys2-location }}'
+          if ([string]::IsNullOrWhiteSpace($msys2Location)) {
+            throw 'msys2/setup-msys2 did not report its installation directory.'
+          }
+          $msysNasm = Join-Path $msys2Location 'usr\bin\nasm.exe'
           if (!(Test-Path $msysNasm)) {
             throw "MSYS2 NASM was not installed: $msysNasm"
           }
