@@ -5,6 +5,7 @@
     "common": [
       "shared",
       "small",
+      "zlib",
       "avcodec",
       "avformat",
       "avutil",
@@ -149,6 +150,7 @@
       "--enable-gpl",
       "--enable-version3",
       "--enable-small",
+      "--enable-zlib",
       "--enable-libmp3lame",
       "--enable-libvpx",
       "--enable-libaom",

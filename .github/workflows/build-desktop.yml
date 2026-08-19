@@ -117,6 +117,7 @@ jobs:
             base-devel
             diffutils
             make
+            nasm
 
       - name: Setup MSVC
         if: matrix.buildFamily == 'windows-msvc'

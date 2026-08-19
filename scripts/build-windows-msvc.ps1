@@ -11,7 +11,7 @@ switch ($SdkArch) {
         $FfmpegCrossCompileFlag = ""
         $FfmpegTargetCflags = "-D_WIN32_WINNT=0x0601 -DWINVER=0x0601 -DNTDDI_VERSION=0x06010000"
         $FfmpegTargetLdflags = "/SUBSYSTEM:CONSOLE,6.01"
-        $FfmpegAssemblyFlag = "--disable-x86asm"
+        $FfmpegAssemblyFlag = ""
         $VcpkgTriplet = "x64-windows"
     }
     "arm64" {
@@ -98,7 +98,8 @@ $RequiredVcpkgDependencyHeaders = @(
     "include/vorbis/codec.h",
     "include/opencore-amrnb/interf_enc.h",
     "include/x264.h",
-    "include/x265.h"
+    "include/x265.h",
+    "include/zlib.h"
 )
 foreach ($RequiredHeader in $RequiredVcpkgDependencyHeaders) {
     if (!(Test-Path (Join-Path $VcpkgDependencyRoot $RequiredHeader))) {
@@ -238,12 +239,12 @@ for import_lib in avcodec avdevice avfilter avformat avutil swresample swscale; 
   cp -p "`${import_lib_path}" "$MsysInstallPrefix/lib/`${import_lib}.lib"
 done
 if [[ -d '$MsysVcpkgDependencyRoot/bin' ]]; then
-  for runtime_pattern in '*mp3lame*.dll' '*vpx*.dll' '*aom*.dll' '*opus*.dll' '*vorbis*.dll' '*ogg*.dll' '*opencore-amrnb*.dll' '*x264*.dll' '*x265*.dll'; do
+  for runtime_pattern in '*mp3lame*.dll' '*vpx*.dll' '*aom*.dll' '*opus*.dll' '*vorbis*.dll' '*ogg*.dll' '*opencore-amrnb*.dll' '*x264*.dll' '*x265*.dll' 'zlib*.dll'; do
     find '$MsysVcpkgDependencyRoot/bin' -maxdepth 1 -type f -iname "`${runtime_pattern}" \
       -exec cp -p {} '$MsysInstallPrefix/bin/' \;
   done
 fi
-for package_name in mp3lame libvpx aom opus libvorbis libogg opencore-amr x264 x265; do
+for package_name in mp3lame libvpx aom opus libvorbis libogg opencore-amr x264 x265 zlib; do
   mkdir -p "$MsysInstallPrefix/licenses/`${package_name}"
   if [[ -f "$MsysVcpkgDependencyRoot/share/`${package_name}/copyright" ]]; then
     cp -p "$MsysVcpkgDependencyRoot/share/`${package_name}/copyright" "$MsysInstallPrefix/licenses/`${package_name}/LICENSE"

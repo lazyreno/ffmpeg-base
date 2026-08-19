@@ -9,6 +9,7 @@
     "libvorbis",
     "opencore-amr",
     "x264",
-    "x265"
+    "x265",
+    "zlib"
   ]
 }
