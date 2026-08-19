@@ -125,6 +125,9 @@ $WindowsSdkLibraryArch = if ($SdkArch -eq "x86_64") { "x64" } else { "arm64" }
 if ([string]::IsNullOrWhiteSpace($env:WindowsSdkDir) -or [string]::IsNullOrWhiteSpace($env:WindowsSDKLibVersion)) {
     throw "Windows SDK library environment is required for FFmpeg linking"
 }
+if ([string]::IsNullOrWhiteSpace($env:VCToolsInstallDir)) {
+    throw "MSVC toolchain environment is required for FFmpeg linking"
+}
 $WindowsSdkLibraryVersion = $env:WindowsSDKLibVersion.TrimEnd("\\")
 $WindowsSdkLibraryRoot = Join-Path $env:WindowsSdkDir "Lib\$WindowsSdkLibraryVersion"
 $WindowsSdkUcrtLibraryDir = Join-Path $WindowsSdkLibraryRoot "ucrt\$WindowsSdkLibraryArch"
@@ -132,6 +135,15 @@ $WindowsSdkUmLibraryDir = Join-Path $WindowsSdkLibraryRoot "um\$WindowsSdkLibrar
 foreach ($WindowsSdkLibraryDir in @($WindowsSdkUcrtLibraryDir, $WindowsSdkUmLibraryDir)) {
     if (!(Test-Path $WindowsSdkLibraryDir)) {
         throw "Windows SDK library directory for $WindowsSdkLibraryArch was not found: $WindowsSdkLibraryDir"
+    }
+}
+$MsvcLibraryDir = Join-Path $env:VCToolsInstallDir "lib\$WindowsSdkLibraryArch"
+$MsvcLinkerPath = Join-Path $env:VCToolsInstallDir "bin\HostX64\$WindowsSdkLibraryArch\link.exe"
+foreach ($MsvcRequiredFile in @(
+    (Join-Path $MsvcLibraryDir "libcmt.lib"),
+    $MsvcLinkerPath)) {
+    if (!(Test-Path $MsvcRequiredFile)) {
+        throw "Required MSVC linker file for $WindowsSdkLibraryArch was not found: $MsvcRequiredFile"
     }
 }
 $WindowsSdkLibraryLink = Join-Path $BuildRoot "windows-sdk-lib"
@@ -143,6 +155,15 @@ if (Test-Path -LiteralPath $WindowsSdkLibraryLink) {
     [System.IO.Directory]::Delete($WindowsSdkLibraryLink)
 }
 New-Item -ItemType Junction -Path $WindowsSdkLibraryLink -Target $WindowsSdkLibraryRoot | Out-Null
+$MsvcToolsLink = Join-Path $BuildRoot "msvc-tools"
+if (Test-Path -LiteralPath $MsvcToolsLink) {
+    $ExistingMsvcToolsLink = Get-Item -LiteralPath $MsvcToolsLink
+    if ($ExistingMsvcToolsLink.LinkType -ne "Junction") {
+        throw "MSVC tools link path is occupied by a non-junction item: $MsvcToolsLink"
+    }
+    [System.IO.Directory]::Delete($MsvcToolsLink)
+}
+New-Item -ItemType Junction -Path $MsvcToolsLink -Target $env:VCToolsInstallDir | Out-Null
 
 $MsysNasmDir = ""
 if ($SdkArch -eq "x86_64") {
@@ -163,6 +184,9 @@ if ($SdkArch -eq "x86_64") {
 $VcpkgDependencyRootForMsvc = $VcpkgDependencyRoot.Replace("\", "/")
 $LibAliasDirForMsvc = $LibAliasDir.Replace("\", "/")
 $WindowsSdkLibraryLinkForMsvc = $WindowsSdkLibraryLink.Replace("\", "/")
+$MsvcToolsLinkForMsvc = $MsvcToolsLink.Replace("\", "/")
+$MsvcLibraryFlag = "/libpath:$MsvcToolsLinkForMsvc/lib/$WindowsSdkLibraryArch"
+$MsvcLinkerForMsvc = "$MsvcToolsLinkForMsvc/bin/HostX64/$WindowsSdkLibraryArch/link.exe"
 $WindowsSdkUcrtLibraryFlag = "/libpath:$WindowsSdkLibraryLinkForMsvc/ucrt/$WindowsSdkLibraryArch"
 $WindowsSdkUmLibraryFlag = "/libpath:$WindowsSdkLibraryLinkForMsvc/um/$WindowsSdkLibraryArch"
 
@@ -245,6 +269,7 @@ echo "bash: `$(command -v bash)"
 echo "awk: `$(command -v awk)"
 echo "clang-cl: `$(command -v clang-cl)"
 echo "link: `$(command -v link)"
+echo "FFmpeg MSVC linker: $MsvcLinkerForMsvc"
 echo "make: `$(command -v make)"
 if [[ -n '$MsysNasmDir' ]]; then
   echo "nasm: `$(command -v nasm)"
@@ -260,12 +285,13 @@ if ! ./configure \
   --prefix='$MsysInstallPrefix' \
   --toolchain=msvc \
   --cc=clang-cl \
+  --ld='$MsvcLinkerForMsvc' \
   --pkg-config='$MsysPkgConfigExe' \
   --target-os=win64 \
   --arch='$FfmpegArch' \
   $FfmpegCrossCompileFlag \
   --extra-cflags='$FfmpegTargetCflags -I$VcpkgDependencyRootForMsvc/include' \
-  --extra-ldflags='$FfmpegTargetLdflags $WindowsSdkUcrtLibraryFlag $WindowsSdkUmLibraryFlag /libpath:$LibAliasDirForMsvc /libpath:$VcpkgDependencyRootForMsvc/lib' \
+  --extra-ldflags='$FfmpegTargetLdflags $MsvcLibraryFlag $WindowsSdkUcrtLibraryFlag $WindowsSdkUmLibraryFlag /libpath:$LibAliasDirForMsvc /libpath:$VcpkgDependencyRootForMsvc/lib' \
   $FfmpegAssemblyFlag \
 $FfmpegProfileConfigureArgs
   ; then
