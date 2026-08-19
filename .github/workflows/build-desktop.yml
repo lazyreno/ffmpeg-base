@@ -186,7 +186,7 @@ jobs:
           if (!(Test-Path $msysNasm)) {
             throw "MSYS2 NASM was not installed: $msysNasm"
           }
-          Split-Path $msysNasm -Parent | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          "FFMPEG_NASM=$msysNasm" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Bootstrap pinned vcpkg on macOS
         if: matrix.buildFamily == 'macos'

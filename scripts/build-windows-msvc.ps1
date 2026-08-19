@@ -124,11 +124,18 @@ Copy-Item -Force $ZlibImportLib (Join-Path $LibAliasDir "zlib.lib")
 
 $MsysNasmDir = ""
 if ($SdkArch -eq "x86_64") {
-    $Nasm = Get-Command nasm -ErrorAction SilentlyContinue
-    if ($null -eq $Nasm) {
-        throw "NASM is required for x86_64 FFmpeg builds but was not found on PATH"
+    $NasmPath = $env:FFMPEG_NASM
+    if ([string]::IsNullOrWhiteSpace($NasmPath)) {
+        $Nasm = Get-Command nasm -ErrorAction SilentlyContinue
+        if ($null -eq $Nasm) {
+            throw "NASM is required for x86_64 FFmpeg builds but was not found on PATH"
+        }
+        $NasmPath = $Nasm.Path
     }
-    $MsysNasmDir = cygpath -u (Split-Path $Nasm.Path -Parent)
+    if (!(Test-Path $NasmPath)) {
+        throw "NASM executable does not exist: $NasmPath"
+    }
+    $MsysNasmDir = cygpath -u (Split-Path $NasmPath -Parent)
 }
 
 $VcpkgDependencyRootForMsvc = $VcpkgDependencyRoot.Replace("\", "/")
