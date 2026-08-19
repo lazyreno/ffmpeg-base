@@ -116,6 +116,20 @@ if (!(Test-Path $LameImportLib)) {
     throw "libmp3lame.lib from $VcpkgTriplet is required for FFmpeg libmp3lame linking"
 }
 Copy-Item -Force $LameImportLib (Join-Path $LibAliasDir "mp3lame.lib")
+$ZlibImportLib = Join-Path $VcpkgDependencyRoot "lib/z.lib"
+if (!(Test-Path $ZlibImportLib)) {
+    throw "z.lib from $VcpkgTriplet is required for FFmpeg zlib linking"
+}
+Copy-Item -Force $ZlibImportLib (Join-Path $LibAliasDir "zlib.lib")
+
+$MsysNasmDir = ""
+if ($SdkArch -eq "x86_64") {
+    $Nasm = Get-Command nasm -ErrorAction SilentlyContinue
+    if ($null -eq $Nasm) {
+        throw "NASM is required for x86_64 FFmpeg builds but was not found on PATH"
+    }
+    $MsysNasmDir = cygpath -u (Split-Path $Nasm.Path -Parent)
+}
 
 $VcpkgDependencyRootForMsvc = $VcpkgDependencyRoot.Replace("\", "/")
 $LibAliasDirForMsvc = $LibAliasDir.Replace("\", "/")
@@ -193,13 +207,17 @@ fi
 cygpath -u "`${args[@]}"
 EOF
 chmod +x '$MsysBuildToolsDir/wslpath'
-export PATH='${MsysBuildToolsDir}:${MsysPkgConfigDir}:'"`$PATH"':/usr/bin'
+export PATH='${MsysBuildToolsDir}:${MsysPkgConfigDir}:${MsysNasmDir}:'"`$PATH"':/usr/bin'
 export PKG_CONFIG_PATH='${MsysVcpkgDependencyRoot}/lib/pkgconfig:${MsysVcpkgDependencyRoot}/share/pkgconfig'":`${PKG_CONFIG_PATH:-}"
 echo "bash: `$(command -v bash)"
 echo "awk: `$(command -v awk)"
 echo "clang-cl: `$(command -v clang-cl)"
 echo "link: `$(command -v link)"
 echo "make: `$(command -v make)"
+if [[ -n '$MsysNasmDir' ]]; then
+  echo "nasm: `$(command -v nasm)"
+  nasm -v
+fi
 echo "pkgconf: `$(command -v pkgconf || true)"
 echo "pkg-config: `$(command -v pkg-config || true)"
 echo "vcpkg pkg-config: $MsysPkgConfigExe"

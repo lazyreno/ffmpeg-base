@@ -173,6 +173,16 @@ jobs:
             }
           }
 
+      - name: Expose MSYS2 NASM to the Windows build
+        if: matrix.buildFamily == 'windows-msvc' && matrix.arch == 'x86_64'
+        shell: pwsh
+        run: |
+          $msysNasm = 'C:\msys64\usr\bin\nasm.exe'
+          if (!(Test-Path $msysNasm)) {
+            throw "MSYS2 NASM was not installed: $msysNasm"
+          }
+          Split-Path $msysNasm -Parent | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
       - name: Bootstrap pinned vcpkg on macOS
         if: matrix.buildFamily == 'macos'
         run: ./.vcpkg-root/bootstrap-vcpkg.sh -disableMetrics
