@@ -144,6 +144,24 @@ if (Test-Path -LiteralPath $WindowsSdkLibraryLink) {
 }
 New-Item -ItemType Junction -Path $WindowsSdkLibraryLink -Target $WindowsSdkLibraryRoot | Out-Null
 
+$MsvcLibraryArch = if ($SdkArch -eq "x86_64") { "x64" } else { "ARM64" }
+if ([string]::IsNullOrWhiteSpace($env:VCToolsInstallDir)) {
+    throw "MSVC toolchain environment is required for FFmpeg linking"
+}
+$MsvcLibraryDir = Join-Path $env:VCToolsInstallDir "lib\$MsvcLibraryArch"
+if (!(Test-Path $MsvcLibraryDir)) {
+    throw "MSVC library directory for $MsvcLibraryArch was not found: $MsvcLibraryDir"
+}
+$MsvcLibraryLink = Join-Path $BuildRoot "msvc-lib"
+if (Test-Path -LiteralPath $MsvcLibraryLink) {
+    $ExistingMsvcLibraryLink = Get-Item -LiteralPath $MsvcLibraryLink
+    if ($ExistingMsvcLibraryLink.LinkType -ne "Junction") {
+        throw "MSVC library link path is occupied by a non-junction item: $MsvcLibraryLink"
+    }
+    [System.IO.Directory]::Delete($MsvcLibraryLink)
+}
+New-Item -ItemType Junction -Path $MsvcLibraryLink -Target $MsvcLibraryDir | Out-Null
+
 $MsysNasmDir = ""
 if ($SdkArch -eq "x86_64") {
     $NasmPath = $env:FFMPEG_NASM
@@ -163,8 +181,10 @@ if ($SdkArch -eq "x86_64") {
 $VcpkgDependencyRootForMsvc = $VcpkgDependencyRoot.Replace("\", "/")
 $LibAliasDirForMsvc = $LibAliasDir.Replace("\", "/")
 $WindowsSdkLibraryLinkForMsvc = $WindowsSdkLibraryLink.Replace("\", "/")
+$MsvcLibraryLinkForMsvc = $MsvcLibraryLink.Replace("\", "/")
 $WindowsSdkUcrtLibraryFlag = "/libpath:$WindowsSdkLibraryLinkForMsvc/ucrt/$WindowsSdkLibraryArch"
 $WindowsSdkUmLibraryFlag = "/libpath:$WindowsSdkLibraryLinkForMsvc/um/$WindowsSdkLibraryArch"
+$MsvcLibraryFlag = "/libpath:$MsvcLibraryLinkForMsvc"
 
 if (!(Test-Path $VcpkgMsysToolsRoot)) {
     throw "vcpkg MSYS2 tools directory is required for pkg-config: $VcpkgMsysToolsRoot"
@@ -265,7 +285,7 @@ if ! ./configure \
   --arch='$FfmpegArch' \
   $FfmpegCrossCompileFlag \
   --extra-cflags='$FfmpegTargetCflags -I$VcpkgDependencyRootForMsvc/include' \
-  --extra-ldflags='$FfmpegTargetLdflags $WindowsSdkUcrtLibraryFlag $WindowsSdkUmLibraryFlag /libpath:$LibAliasDirForMsvc /libpath:$VcpkgDependencyRootForMsvc/lib' \
+  --extra-ldflags='$FfmpegTargetLdflags $MsvcLibraryFlag $WindowsSdkUcrtLibraryFlag $WindowsSdkUmLibraryFlag /libpath:$LibAliasDirForMsvc /libpath:$VcpkgDependencyRootForMsvc/lib' \
   $FfmpegAssemblyFlag \
 $FfmpegProfileConfigureArgs
   ; then
@@ -289,7 +309,7 @@ for import_lib in avcodec avdevice avfilter avformat avutil swresample swscale; 
   cp -p "`${import_lib_path}" "$MsysInstallPrefix/lib/`${import_lib}.lib"
 done
 if [[ -d '$MsysVcpkgDependencyRoot/bin' ]]; then
-  for runtime_pattern in '*mp3lame*.dll' '*vpx*.dll' '*aom*.dll' '*opus*.dll' '*vorbis*.dll' '*ogg*.dll' '*opencore-amrnb*.dll' '*x264*.dll' '*x265*.dll' 'zlib*.dll'; do
+  for runtime_pattern in '*mp3lame*.dll' '*vpx*.dll' '*aom*.dll' '*opus*.dll' '*vorbis*.dll' '*ogg*.dll' '*opencore-amrnb*.dll' '*x264*.dll' '*x265*.dll' 'z.dll' 'zlib*.dll'; do
     find '$MsysVcpkgDependencyRoot/bin' -maxdepth 1 -type f -iname "`${runtime_pattern}" \
       -exec cp -p {} '$MsysInstallPrefix/bin/' \;
   done
