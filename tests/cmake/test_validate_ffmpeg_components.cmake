@@ -64,6 +64,7 @@ function(write_registry_fixture fixture_root volume_symbol include_alac include_
     endif()
     file(WRITE "${fixture_root}/libavfilter/filter_list.c" "
 &ff_af_adelay,
+&ff_af_afftdn,
 &ff_af_aformat,
 &ff_af_amix,
 &ff_af_aresample,

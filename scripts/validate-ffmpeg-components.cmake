@@ -40,7 +40,7 @@ file(READ "${muxer_list}" muxer_list_content)
 file(READ "${codec_list}" codec_list_content)
 file(READ "${filter_list}" filter_list_content)
 
-foreach(audio_filter IN ITEMS adelay aformat amix aresample pan volume)
+foreach(audio_filter IN ITEMS adelay afftdn aformat amix aresample pan volume)
     require_registry_symbol(
         "${filter_list}" "${filter_list_content}"
         "ff_af_${audio_filter}" "${audio_filter} audio filter")

@@ -113,7 +113,7 @@ function(validate_video_to_mp3_output_capabilities tool_path)
 endfunction()
 
 function(validate_stem_export_filters tool_path)
-    foreach(audio_filter IN ITEMS adelay aformat amix aresample pan volume)
+    foreach(audio_filter IN ITEMS adelay afftdn aformat amix aresample pan volume)
         validate_runtime_component("${tool_path}" "-filters" "${audio_filter}" "filter")
     endforeach()
 endfunction()
