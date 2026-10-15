@@ -145,6 +145,7 @@ require_not_contains("${version_content}" "\"platformFeatureExtras\"" "sdk-versi
 
 foreach(audio_filter IN ITEMS
     adelay
+    afftdn
     aformat
     amix
     aresample
@@ -564,7 +565,7 @@ foreach(component_validator_marker IN ITEMS
     "ff_pcm_\\$\\{pcm_format\\}_demuxer"
     "ff_pcm_\\$\\{pcm_format\\}_decoder"
     "ff_pcm_\\$\\{pcm_format\\}_encoder"
-    "foreach\\(audio_filter IN ITEMS adelay aformat amix aresample pan volume\\)"
+    "foreach\\(audio_filter IN ITEMS adelay afftdn aformat amix aresample pan volume\\)"
     "ff_af_\\$\\{audio_filter\\}")
   require_contains(
     "${configure_component_validator_content}"
@@ -743,7 +744,7 @@ endforeach()
 
 foreach(ai_stem_export_runtime_marker IN ITEMS
     "validate_stem_export_filters"
-    "foreach\\(audio_filter IN ITEMS adelay aformat amix aresample pan volume\\)"
+    "foreach\\(audio_filter IN ITEMS adelay afftdn aformat amix aresample pan volume\\)"
     "validate_ai_stem_export"
     "validate-ai-stem-export\\.py")
   require_contains(
