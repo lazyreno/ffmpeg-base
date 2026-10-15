@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -53,11 +54,15 @@ def validate_manifest_requirements(
 
 
 def run_ffmpeg_encoder_listing(ffmpeg_path: Path) -> tuple[int, str]:
+    environment = dict(os.environ)
+    environment["PATH"] = f"{ffmpeg_path.parent}{os.pathsep}{environment.get('PATH', '')}"
     result = subprocess.run(
         [str(ffmpeg_path), "-hide_banner", "-encoders"],
         check=False,
         capture_output=True,
         text=True,
+        cwd=ffmpeg_path.parent,
+        env=environment,
     )
     return result.returncode, f"{result.stdout}\n{result.stderr}"
 

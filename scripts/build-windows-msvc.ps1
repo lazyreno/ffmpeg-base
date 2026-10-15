@@ -110,6 +110,15 @@ foreach ($RequiredHeader in $RequiredVcpkgDependencyHeaders) {
 if (!(Test-Path (Join-Path $VcpkgDependencyRoot "lib"))) {
     throw "vcpkg lib directory for $VcpkgTriplet is required before building the desktop LGPL app SDK profile"
 }
+$VpxImportLib = Join-Path $VcpkgDependencyRoot "lib/vpx.lib"
+if (!(Test-Path $VpxImportLib)) {
+    throw "vpx.lib from $VcpkgTriplet is required for FFmpeg libvpx VP8/VP9 linking"
+}
+$VpxRuntimeDlls = @(Get-ChildItem -Path (Join-Path $VcpkgDependencyRoot "bin") -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match "vpx.*\.dll$" })
+if ($VpxRuntimeDlls.Count -eq 0) {
+    throw "A libvpx runtime DLL is required under $VcpkgTriplet/bin for FFmpeg libvpx VP8/VP9 support"
+}
 
 New-Item -ItemType Directory -Force $LibAliasDir | Out-Null
 $LameImportLib = Join-Path $VcpkgDependencyRoot "lib/libmp3lame.lib"
@@ -282,6 +291,12 @@ echo "pkg-config: `$(command -v pkg-config || true)"
 echo "vcpkg pkg-config: $MsysPkgConfigExe"
 echo "wslpath: `$(command -v wslpath)"
 '$MsysPkgConfigExe' --version
+if ! '$MsysPkgConfigExe' --exists "vpx >= 1.4.0"; then
+  echo "vcpkg pkg-config cannot locate the required vpx >= 1.4.0 package" >&2
+  exit 1
+fi
+echo "vpx cflags: `$('$MsysPkgConfigExe' --cflags vpx)"
+echo "vpx libs: `$('$MsysPkgConfigExe' --libs vpx)"
 if ! '$MsysPkgConfigExe' --exists "aom >= 2.0.0"; then
   echo "vcpkg pkg-config cannot locate the required aom >= 2.0.0 package" >&2
   exit 1
@@ -324,6 +339,11 @@ if [[ -d '$MsysVcpkgDependencyRoot/bin' ]]; then
     find '$MsysVcpkgDependencyRoot/bin' -maxdepth 1 -type f -iname "`${runtime_pattern}" \
       -exec cp -p {} '$MsysInstallPrefix/bin/' \;
   done
+  # Keep all vcpkg runtime DLLs beside FFmpeg. This includes libvpx's
+  # transitive MSVC runtime dependencies, which are otherwise easy to miss
+  # when the package changes its DLL naming or dependency graph.
+  find '$MsysVcpkgDependencyRoot/bin' -maxdepth 1 -type f -iname '*.dll' \
+    -exec cp -p {} '$MsysInstallPrefix/bin/' \;
 fi
 for package_name in mp3lame libvpx aom opus libvorbis libogg opencore-amr x264 x265 zlib; do
   mkdir -p "$MsysInstallPrefix/licenses/`${package_name}"
@@ -351,6 +371,9 @@ if ($LASTEXITCODE -ne 0) {
 $Python = (Get-Command python -ErrorAction Stop).Source
 $RuntimeCapabilityValidator = Join-Path $RootDir "scripts/validate-ffmpeg-runtime-capabilities.py"
 $StagedFfmpeg = Join-Path $SdkRoot "bin/ffmpeg.exe"
+if (!(Test-Path $StagedFfmpeg)) {
+    throw "Staged Windows FFmpeg executable was not found: $StagedFfmpeg"
+}
 & $Python $RuntimeCapabilityValidator `
     --ffmpeg $StagedFfmpeg `
     --require-encoder "libvpx-vp9"
