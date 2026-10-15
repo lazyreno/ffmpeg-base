@@ -5,6 +5,7 @@ $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RootDir
 
 $SdkArch = if ($env:SDK_ARCH) { $env:SDK_ARCH } else { "x86_64" }
+$NativeArm64Host = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64
 switch ($SdkArch) {
     "x86_64" {
         $FfmpegArch = "x86_64"
@@ -16,7 +17,7 @@ switch ($SdkArch) {
     }
     "arm64" {
         $FfmpegArch = "aarch64"
-        $FfmpegCrossCompileFlag = "--enable-cross-compile"
+        $FfmpegCrossCompileFlag = if ($NativeArm64Host) { "" } else { "--enable-cross-compile" }
         $FfmpegTargetCflags = "--target=arm64-windows"
         $FfmpegTargetLdflags = ""
         $FfmpegAssemblyFlag = "--disable-asm"
@@ -337,6 +338,16 @@ if ($LASTEXITCODE -ne 0) {
     throw "Windows SDK staging failed"
 }
 
+$Python = (Get-Command python -ErrorAction Stop).Source
+$RuntimeCapabilityValidator = Join-Path $RootDir "scripts/validate-ffmpeg-runtime-capabilities.py"
+$StagedFfmpeg = Join-Path $SdkRoot "bin/ffmpeg.exe"
+& $Python $RuntimeCapabilityValidator `
+    --ffmpeg $StagedFfmpeg `
+    --require-encoder "libvpx-vp9"
+if ($LASTEXITCODE -ne 0) {
+    throw "Windows SDK runtime encoder validation failed"
+}
+
 $Dumpbin = (Get-Command dumpbin -ErrorAction Stop).Path
 & python "$RootDir/scripts/validate-windows-sdk-subsystem.py" `
     --sdk-root "$SdkRoot" `
@@ -367,6 +378,14 @@ cmake `
     -P "$RootDir/scripts/generate-manifest.cmake"
 if ($LASTEXITCODE -ne 0) {
     throw "Windows SDK manifest generation failed"
+}
+
+& $Python $RuntimeCapabilityValidator `
+    --ffmpeg $StagedFfmpeg `
+    --require-encoder "libvpx-vp9" `
+    --manifest (Join-Path $SdkRoot "manifest.json")
+if ($LASTEXITCODE -ne 0) {
+    throw "Windows SDK manifest/runtime capability validation failed"
 }
 
 cmake `
