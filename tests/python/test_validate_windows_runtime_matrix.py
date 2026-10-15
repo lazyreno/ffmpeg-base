@@ -28,6 +28,19 @@ class WindowsRuntimeMatrixTest(unittest.TestCase):
         self.assertLess(first_validator_call, manifest_offset)
         self.assertGreater(second_validator_call, manifest_offset)
 
+    def test_arm64_build_uses_architecture_matched_pkg_config_for_aom(self):
+        script = BUILD_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'return $_.FullName -match "\\\\(clangarm64|usr)\\\\bin\\\\"',
+            script,
+        )
+        self.assertIn('"aom >= 2.0.0"', script)
+        self.assertIn(
+            '$SdkArch -eq "arm64" -and $_.FullName -match "\\\\clangarm64\\\\bin\\\\(pkg-config|pkgconf)\\.exe$"',
+            script,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

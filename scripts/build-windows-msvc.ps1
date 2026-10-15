@@ -192,9 +192,15 @@ if (!(Test-Path $VcpkgMsysToolsRoot)) {
 }
 $PkgConfigCandidates = @(Get-ChildItem -Path $VcpkgMsysToolsRoot -Recurse -File |
     Where-Object { $_.Name -in @("pkg-config.exe", "pkgconf.exe") } |
-    Where-Object { $_.FullName -match "\\(mingw64|usr)\\bin\\" } |
+    Where-Object {
+        if ($SdkArch -eq "arm64") {
+            return $_.FullName -match "\\(clangarm64|usr)\\bin\\"
+        }
+        return $_.FullName -match "\\(mingw64|usr)\\bin\\"
+    } |
     Sort-Object {
-        if ($_.FullName -match "\\mingw64\\bin\\pkg-config\.exe$") { 0 }
+        if ($SdkArch -eq "arm64" -and $_.FullName -match "\\clangarm64\\bin\\(pkg-config|pkgconf)\.exe$") { 0 }
+        elseif ($_.FullName -match "\\mingw64\\bin\\(pkg-config|pkgconf)\.exe$") { 0 }
         elseif ($_.FullName -match "\\usr\\bin\\pkg-config\.exe$") { 1 }
         else { 2 }
     }, FullName)
@@ -276,6 +282,10 @@ echo "pkg-config: `$(command -v pkg-config || true)"
 echo "vcpkg pkg-config: $MsysPkgConfigExe"
 echo "wslpath: `$(command -v wslpath)"
 '$MsysPkgConfigExe' --version
+if ! '$MsysPkgConfigExe' --exists "aom >= 2.0.0"; then
+  echo "vcpkg pkg-config cannot locate the required aom >= 2.0.0 package" >&2
+  exit 1
+fi
 cd '$MsysSourceDir'
 if ! ./configure \
   --prefix='$MsysInstallPrefix' \
