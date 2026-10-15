@@ -125,7 +125,12 @@ jobs:
         shell: pwsh
         run: |
           $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
-          $vsInstall = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $requiredComponent = if ("${{ matrix.arch }}" -eq "arm64") {
+            "Microsoft.VisualStudio.Component.VC.Tools.ARM64"
+          } else {
+            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+          }
+          $vsInstall = & $vswhere -latest -products * -requires $requiredComponent -property installationPath
           if (-not $vsInstall) {
             throw "Visual Studio with MSVC tools was not found."
           }

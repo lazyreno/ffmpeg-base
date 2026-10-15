@@ -4,7 +4,7 @@ set(repo_root "${CMAKE_CURRENT_LIST_DIR}/../..")
 set(validator "${repo_root}/scripts/validate-ffmpeg-components.cmake")
 set(test_root "${repo_root}/build/test-validate-ffmpeg-components")
 
-function(write_registry_fixture fixture_root volume_symbol include_alac include_amrnb include_amr_muxer include_aiff_muxer include_pcm_s16be include_wmav2)
+function(write_registry_fixture fixture_root volume_symbol include_alac include_amrnb include_amr_muxer include_aiff_muxer include_pcm_s16be include_wmav2 include_vp9)
     file(MAKE_DIRECTORY
         "${fixture_root}/libavformat"
         "${fixture_root}/libavcodec"
@@ -62,6 +62,11 @@ function(write_registry_fixture fixture_root volume_symbol include_alac include_
 &ff_wmav2_encoder,
 ")
     endif()
+    if(include_vp9)
+        file(APPEND "${fixture_root}/libavcodec/codec_list.c" "
+&ff_libvpx_vp9_encoder,
+")
+    endif()
     file(WRITE "${fixture_root}/libavfilter/filter_list.c" "
 &ff_af_adelay,
 &ff_af_aformat,
@@ -96,7 +101,7 @@ endfunction()
 file(REMOVE_RECURSE "${test_root}")
 
 set(valid_fixture "${test_root}/valid")
-write_registry_fixture("${valid_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE TRUE TRUE)
+write_registry_fixture("${valid_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE TRUE TRUE TRUE)
 execute_process(
     COMMAND "${CMAKE_COMMAND}"
         "-DSOURCE_DIR=${valid_fixture}"
@@ -112,37 +117,43 @@ if(NOT valid_result EQUAL 0)
 endif()
 
 set(missing_alac_fixture "${test_root}/missing-alac")
-write_registry_fixture("${missing_alac_fixture}" "ff_af_volume" FALSE TRUE TRUE TRUE TRUE TRUE)
+write_registry_fixture("${missing_alac_fixture}" "ff_af_volume" FALSE TRUE TRUE TRUE TRUE TRUE TRUE)
 expect_missing_registry_symbol(
     "${missing_alac_fixture}"
     "ff_alac_encoder")
 
 set(missing_amrnb_fixture "${test_root}/missing-amrnb")
-write_registry_fixture("${missing_amrnb_fixture}" "ff_af_volume" TRUE FALSE TRUE TRUE TRUE TRUE)
+write_registry_fixture("${missing_amrnb_fixture}" "ff_af_volume" TRUE FALSE TRUE TRUE TRUE TRUE TRUE)
 expect_missing_registry_symbol(
     "${missing_amrnb_fixture}"
     "ff_libopencore_amrnb_encoder")
 
 set(missing_amr_muxer_fixture "${test_root}/missing-amr-muxer")
-write_registry_fixture("${missing_amr_muxer_fixture}" "ff_af_volume" TRUE TRUE FALSE TRUE TRUE TRUE)
+write_registry_fixture("${missing_amr_muxer_fixture}" "ff_af_volume" TRUE TRUE FALSE TRUE TRUE TRUE TRUE)
 expect_missing_registry_symbol(
     "${missing_amr_muxer_fixture}"
     "ff_amr_muxer")
 
 set(missing_aiff_muxer_fixture "${test_root}/missing-aiff-muxer")
-write_registry_fixture("${missing_aiff_muxer_fixture}" "ff_af_volume" TRUE TRUE TRUE FALSE TRUE TRUE)
+write_registry_fixture("${missing_aiff_muxer_fixture}" "ff_af_volume" TRUE TRUE TRUE FALSE TRUE TRUE TRUE)
 expect_missing_registry_symbol(
     "${missing_aiff_muxer_fixture}"
     "ff_aiff_muxer")
 
 set(missing_pcm_s16be_fixture "${test_root}/missing-pcm-s16be")
-write_registry_fixture("${missing_pcm_s16be_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE FALSE TRUE)
+write_registry_fixture("${missing_pcm_s16be_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE FALSE TRUE TRUE)
 expect_missing_registry_symbol(
     "${missing_pcm_s16be_fixture}"
     "ff_pcm_s16be_encoder")
 
 set(missing_wmav2_fixture "${test_root}/missing-wmav2")
-write_registry_fixture("${missing_wmav2_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE TRUE FALSE)
+write_registry_fixture("${missing_wmav2_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE TRUE FALSE TRUE)
+
+set(missing_vp9_fixture "${test_root}/missing-vp9")
+write_registry_fixture("${missing_vp9_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE TRUE TRUE FALSE)
+expect_missing_registry_symbol(
+    "${missing_vp9_fixture}"
+    "ff_libvpx_vp9_encoder")
 expect_missing_registry_symbol(
     "${missing_wmav2_fixture}"
     "ff_wmav2_encoder")
@@ -151,6 +162,7 @@ set(substring_fixture "${test_root}/substring")
 write_registry_fixture(
     "${substring_fixture}"
     "ff_af_volumedetect"
+    TRUE
     TRUE
     TRUE
     TRUE

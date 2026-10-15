@@ -44,8 +44,8 @@
       "profile": "desktop",
       "minimumSystemVersion": "10.0",
       "buildFamily": "windows-msvc",
-      "runner": "windows-2022",
-      "msvcArch": "amd64_arm64",
+      "runner": "windows-11-arm",
+      "msvcArch": "arm64",
       "triplet": "arm64-windows",
       "archiveExt": "zip",
       "enabled": true

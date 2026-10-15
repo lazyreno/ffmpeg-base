@@ -76,6 +76,9 @@ require_registry_symbol(
 require_registry_symbol(
     "${codec_list}" "${codec_list_content}"
     "ff_libx265_encoder" "libx265 encoder")
+require_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
+    "ff_libvpx_vp9_encoder" "libvpx-vp9 encoder")
 reject_registry_symbol(
     "${codec_list}" "${codec_list_content}"
     "ff_h264_videotoolbox_encoder" "h264_videotoolbox hardware encoder")
