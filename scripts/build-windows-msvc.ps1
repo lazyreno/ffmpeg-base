@@ -245,7 +245,7 @@ $MsysRootDir = cygpath -u $RootDir
 $MsysBuildToolsDir = cygpath -u $BuildToolsDir
 $MsysVcpkgDependencyRoot = cygpath -u $VcpkgDependencyRoot
 $MsysPkgConfigExe = cygpath -u $PkgConfigExe
-$MsysPkgConfigDir = Split-Path $MsysPkgConfigExe -Parent
+$MsysPkgConfigDir = cygpath -u (Split-Path -Path $PkgConfigExe -Parent)
 
 $configureCommand = @"
 set -euo pipefail
@@ -350,7 +350,7 @@ done
 
 $ConfigureScriptPath = Join-Path $BuildToolsDir "run-ffmpeg-build.sh"
 Set-Content -LiteralPath $ConfigureScriptPath -Value $configureCommand -NoNewline -Encoding utf8NoBOM
-bash "$ConfigureScriptPath"
+bash --login "$ConfigureScriptPath"
 if ($LASTEXITCODE -ne 0) {
     throw "FFmpeg Windows MSVC build failed"
 }
