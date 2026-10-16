@@ -353,7 +353,9 @@ for package_name in mp3lame libvpx aom opus libvorbis libogg opencore-amr x264 x
 done
 "@
 
-bash -lc $configureCommand
+$ConfigureScriptPath = Join-Path $BuildToolsDir "run-ffmpeg-build.sh"
+Set-Content -LiteralPath $ConfigureScriptPath -Value $configureCommand -NoNewline -Encoding utf8NoBOM
+bash "$ConfigureScriptPath"
 if ($LASTEXITCODE -ne 0) {
     throw "FFmpeg Windows MSVC build failed"
 }

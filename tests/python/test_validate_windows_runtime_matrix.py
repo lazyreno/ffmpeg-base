@@ -41,6 +41,14 @@ class WindowsRuntimeMatrixTest(unittest.TestCase):
             script,
         )
 
+    def test_bash_build_command_is_run_from_a_script_file(self):
+        script = BUILD_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("$ConfigureScriptPath", script)
+        self.assertIn("Set-Content -LiteralPath $ConfigureScriptPath", script)
+        self.assertIn('bash "$ConfigureScriptPath"', script)
+        self.assertNotIn("bash -lc $configureCommand", script)
+
 
 if __name__ == "__main__":
     unittest.main()
