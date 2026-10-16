@@ -114,11 +114,6 @@ $VpxImportLib = Join-Path $VcpkgDependencyRoot "lib/vpx.lib"
 if (!(Test-Path $VpxImportLib)) {
     throw "vpx.lib from $VcpkgTriplet is required for FFmpeg libvpx VP8/VP9 linking"
 }
-$VpxRuntimeDlls = @(Get-ChildItem -Path (Join-Path $VcpkgDependencyRoot "bin") -File -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -match "vpx.*\.dll$" })
-if ($VpxRuntimeDlls.Count -eq 0) {
-    throw "A libvpx runtime DLL is required under $VcpkgTriplet/bin for FFmpeg libvpx VP8/VP9 support"
-}
 
 New-Item -ItemType Directory -Force $LibAliasDir | Out-Null
 $LameImportLib = Join-Path $VcpkgDependencyRoot "lib/libmp3lame.lib"
