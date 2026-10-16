@@ -622,6 +622,7 @@ require_not_contains("${macos_build_script_content}" "desktop LGPL app SDK profi
 
 require_contains("${windows_build_script_content}" "--toolchain=msvc" "Windows SDK build must use FFmpeg's MSVC toolchain")
 require_contains("${windows_build_script_content}" "--cc=clang-cl" "Windows SDK build must use clang-cl with the MSVC ABI")
+require_contains("${windows_build_script_content}" "MSYS2_ARG_CONV_EXCL='/MD'" "Windows FFmpeg configure probes must preserve the MSVC /MD flag in MSYS")
 require_contains("${windows_build_script_content}" "--extra-cflags='\\$FfmpegTargetCflags /MD -I" "Windows FFmpeg configure probes must use the vcpkg dynamic CRT")
 require_contains("${windows_build_script_content}" "\\$FfmpegArch = \"x86_64\"" "Windows build must map x86_64 to FFmpeg x86_64")
 require_contains("${windows_build_script_content}" "\\$FfmpegArch = \"aarch64\"" "Windows build must map arm64 to FFmpeg aarch64")
