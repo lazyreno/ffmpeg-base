@@ -249,6 +249,7 @@ $MsysPkgConfigDir = cygpath -u (Split-Path -Path $PkgConfigExe -Parent)
 
 $configureCommand = @"
 set -euo pipefail
+export MSYS2_ARG_CONV_EXCL='/MD'
 mkdir -p '$MsysBuildToolsDir'
 cat > '$MsysBuildToolsDir/wslpath' <<'EOF'
 #!/usr/bin/env bash
