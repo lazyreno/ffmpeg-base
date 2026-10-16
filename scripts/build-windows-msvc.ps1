@@ -5,6 +5,7 @@ $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RootDir
 
 $SdkArch = if ($env:SDK_ARCH) { $env:SDK_ARCH } else { "x86_64" }
+$NativeArm64Host = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64
 switch ($SdkArch) {
     "x86_64" {
         $FfmpegArch = "x86_64"
@@ -16,7 +17,7 @@ switch ($SdkArch) {
     }
     "arm64" {
         $FfmpegArch = "aarch64"
-        $FfmpegCrossCompileFlag = "--enable-cross-compile"
+        $FfmpegCrossCompileFlag = if ($NativeArm64Host) { "" } else { "--enable-cross-compile" }
         $FfmpegTargetCflags = "--target=arm64-windows"
         $FfmpegTargetLdflags = ""
         $FfmpegAssemblyFlag = "--disable-asm"
@@ -109,6 +110,15 @@ foreach ($RequiredHeader in $RequiredVcpkgDependencyHeaders) {
 if (!(Test-Path (Join-Path $VcpkgDependencyRoot "lib"))) {
     throw "vcpkg lib directory for $VcpkgTriplet is required before building the desktop LGPL app SDK profile"
 }
+$VpxImportLib = Join-Path $VcpkgDependencyRoot "lib/vpx.lib"
+if (!(Test-Path $VpxImportLib)) {
+    throw "vpx.lib from $VcpkgTriplet is required for FFmpeg libvpx VP8/VP9 linking"
+}
+$VpxRuntimeDlls = @(Get-ChildItem -Path (Join-Path $VcpkgDependencyRoot "bin") -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match "vpx.*\.dll$" })
+if ($VpxRuntimeDlls.Count -eq 0) {
+    throw "A libvpx runtime DLL is required under $VcpkgTriplet/bin for FFmpeg libvpx VP8/VP9 support"
+}
 
 New-Item -ItemType Directory -Force $LibAliasDir | Out-Null
 $LameImportLib = Join-Path $VcpkgDependencyRoot "lib/libmp3lame.lib"
@@ -191,9 +201,15 @@ if (!(Test-Path $VcpkgMsysToolsRoot)) {
 }
 $PkgConfigCandidates = @(Get-ChildItem -Path $VcpkgMsysToolsRoot -Recurse -File |
     Where-Object { $_.Name -in @("pkg-config.exe", "pkgconf.exe") } |
-    Where-Object { $_.FullName -match "\\(mingw64|usr)\\bin\\" } |
+    Where-Object {
+        if ($SdkArch -eq "arm64") {
+            return $_.FullName -match "\\(clangarm64|usr)\\bin\\"
+        }
+        return $_.FullName -match "\\(mingw64|usr)\\bin\\"
+    } |
     Sort-Object {
-        if ($_.FullName -match "\\mingw64\\bin\\pkg-config\.exe$") { 0 }
+        if ($SdkArch -eq "arm64" -and $_.FullName -match "\\clangarm64\\bin\\(pkg-config|pkgconf)\.exe$") { 0 }
+        elseif ($_.FullName -match "\\mingw64\\bin\\(pkg-config|pkgconf)\.exe$") { 0 }
         elseif ($_.FullName -match "\\usr\\bin\\pkg-config\.exe$") { 1 }
         else { 2 }
     }, FullName)
@@ -275,6 +291,16 @@ echo "pkg-config: `$(command -v pkg-config || true)"
 echo "vcpkg pkg-config: $MsysPkgConfigExe"
 echo "wslpath: `$(command -v wslpath)"
 '$MsysPkgConfigExe' --version
+if ! '$MsysPkgConfigExe' --exists "vpx >= 1.4.0"; then
+  echo "vcpkg pkg-config cannot locate the required vpx >= 1.4.0 package" >&2
+  exit 1
+fi
+echo "vpx cflags: `$('$MsysPkgConfigExe' --cflags vpx)"
+echo "vpx libs: `$('$MsysPkgConfigExe' --libs vpx)"
+if ! '$MsysPkgConfigExe' --exists "aom >= 2.0.0"; then
+  echo "vcpkg pkg-config cannot locate the required aom >= 2.0.0 package" >&2
+  exit 1
+fi
 cd '$MsysSourceDir'
 if ! ./configure \
   --prefix='$MsysInstallPrefix' \
@@ -313,6 +339,11 @@ if [[ -d '$MsysVcpkgDependencyRoot/bin' ]]; then
     find '$MsysVcpkgDependencyRoot/bin' -maxdepth 1 -type f -iname "`${runtime_pattern}" \
       -exec cp -p {} '$MsysInstallPrefix/bin/' \;
   done
+  # Keep all vcpkg runtime DLLs beside FFmpeg. This includes libvpx's
+  # transitive MSVC runtime dependencies, which are otherwise easy to miss
+  # when the package changes its DLL naming or dependency graph.
+  find '$MsysVcpkgDependencyRoot/bin' -maxdepth 1 -type f -iname '*.dll' \
+    -exec cp -p {} '$MsysInstallPrefix/bin/' \;
 fi
 for package_name in mp3lame libvpx aom opus libvorbis libogg opencore-amr x264 x265 zlib; do
   mkdir -p "$MsysInstallPrefix/licenses/`${package_name}"
@@ -335,6 +366,19 @@ bash "$MsysRootDir/scripts/stage-sdk.sh" `
     --arch "$SdkArch"
 if ($LASTEXITCODE -ne 0) {
     throw "Windows SDK staging failed"
+}
+
+$Python = (Get-Command python -ErrorAction Stop).Source
+$RuntimeCapabilityValidator = Join-Path $RootDir "scripts/validate-ffmpeg-runtime-capabilities.py"
+$StagedFfmpeg = Join-Path $SdkRoot "bin/ffmpeg.exe"
+if (!(Test-Path $StagedFfmpeg)) {
+    throw "Staged Windows FFmpeg executable was not found: $StagedFfmpeg"
+}
+& $Python $RuntimeCapabilityValidator `
+    --ffmpeg $StagedFfmpeg `
+    --require-encoder "libvpx-vp9"
+if ($LASTEXITCODE -ne 0) {
+    throw "Windows SDK runtime encoder validation failed"
 }
 
 $Dumpbin = (Get-Command dumpbin -ErrorAction Stop).Path
@@ -367,6 +411,14 @@ cmake `
     -P "$RootDir/scripts/generate-manifest.cmake"
 if ($LASTEXITCODE -ne 0) {
     throw "Windows SDK manifest generation failed"
+}
+
+& $Python $RuntimeCapabilityValidator `
+    --ffmpeg $StagedFfmpeg `
+    --require-encoder "libvpx-vp9" `
+    --manifest (Join-Path $SdkRoot "manifest.json")
+if ($LASTEXITCODE -ne 0) {
+    throw "Windows SDK manifest/runtime capability validation failed"
 }
 
 cmake `
