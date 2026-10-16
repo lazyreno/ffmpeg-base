@@ -614,7 +614,7 @@ require_contains("${windows_build_script_content}" "\\*opencore-amrnb\\*\\.dll" 
 require_contains("${windows_build_script_content}" "opencore-amr" "Windows build must stage OpenCORE-AMR license metadata")
 require_contains("${windows_build_script_content}" "vpx\\.lib" "Windows build must validate the libvpx import library")
 require_contains("${windows_build_script_content}" "vpx >= 1\\.4\\.0" "Windows build must validate the libvpx pkg-config package")
-require_contains("${windows_build_script_content}" "VpxRuntimeDlls" "Windows build must validate the libvpx runtime DLL")
+require_not_contains("${windows_build_script_content}" "VpxRuntimeDlls" "Windows build must not require a libvpx runtime DLL when vcpkg provides static libvpx")
 require_contains("${stage_script_content}" "libopencore-amrnb\\*\\.dylib" "macOS staging must recognize OpenCORE-AMR runtime libraries")
 require_contains("${stage_script_content}" "LICENSE\\.opencore-amr\\.txt" "macOS staging must name the OpenCORE-AMR license file")
 require_contains("${macos_build_script_content}" "desktop GPL software SDK profile" "macOS dependency errors must identify the GPL software SDK profile")
