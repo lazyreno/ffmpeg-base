@@ -313,9 +313,13 @@ $FfmpegProfileConfigureArgs
   cat ffbuild/config.log >&2 || true
   exit 1
 fi
-cmake \
+if ! cmake \
   -D SOURCE_DIR='$MsysSourceDir' \
-  -P '$MsysRootDir/scripts/validate-ffmpeg-components.cmake'
+  -P '$MsysRootDir/scripts/validate-ffmpeg-components.cmake'; then
+  echo "FFmpeg component validation failed; libvpx VP9 configure context follows:" >&2
+  grep -n -C 32 "check_pkg_config libvpx_vp9_encoder" ffbuild/config.log >&2 || cat ffbuild/config.log >&2 || true
+  exit 1
+fi
 make -j`$(nproc)
 find . -name '*.d' -delete
 make install
