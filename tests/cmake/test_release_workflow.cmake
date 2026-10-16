@@ -170,6 +170,16 @@ foreach(video_to_mp3_component IN ITEMS
   require_contains("${profile_content}" "${video_to_mp3_component}" "FFmpeg profile must declare Video to MP3 output component: ${video_to_mp3_component}")
 endforeach()
 
+foreach(webm_component IN ITEMS
+    "muxer-webm"
+    "encoder-libopus"
+    "encoder-libvpx_vp9"
+    "--enable-muxer=webm"
+    "--enable-encoder=libopus"
+    "--enable-encoder=libvpx_vp9")
+  require_contains("${profile_content}" "${webm_component}" "FFmpeg profile must declare WebM output component: ${webm_component}")
+endforeach()
+
 foreach(pcm_format IN ITEMS s16le s24le s32le f32le)
   require_contains(
     "${profile_content}"
@@ -651,6 +661,9 @@ foreach(validation_marker IN ITEMS
     "NOT SDK_ARCH STREQUAL \"arm64\""
     "validate_windows_runtime"
     "validate_runtime_muxer"
+    "validate_webm_output_capabilities"
+    "libvpx-vp9"
+    "libopus"
     "-muxers"
     "f32le")
   require_contains("${validate_script_content}" "${validation_marker}" "SDK validation is missing marker: ${validation_marker}")
