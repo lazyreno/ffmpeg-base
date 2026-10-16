@@ -305,7 +305,7 @@ if ! ./configure \
   --target-os=win64 \
   --arch='$FfmpegArch' \
   $FfmpegCrossCompileFlag \
-  --extra-cflags='$FfmpegTargetCflags -I$VcpkgDependencyRootForMsvc/include' \
+  --extra-cflags='$FfmpegTargetCflags /MD -I$VcpkgDependencyRootForMsvc/include' \
   --extra-ldflags='$FfmpegTargetLdflags $MsvcLibraryFlag $WindowsSdkUcrtLibraryFlag $WindowsSdkUmLibraryFlag /libpath:$LibAliasDirForMsvc /libpath:$VcpkgDependencyRootForMsvc/lib' \
   $FfmpegAssemblyFlag \
 $FfmpegProfileConfigureArgs
