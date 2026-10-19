@@ -249,7 +249,6 @@ $MsysPkgConfigDir = cygpath -u (Split-Path -Path $PkgConfigExe -Parent)
 
 $configureCommand = @"
 set -euo pipefail
-export MSYS2_ARG_CONV_EXCL='/MD'
 mkdir -p '$MsysBuildToolsDir'
 cat > '$MsysBuildToolsDir/wslpath' <<'EOF'
 #!/usr/bin/env bash
@@ -306,7 +305,7 @@ if ! ./configure \
   --target-os=win64 \
   --arch='$FfmpegArch' \
   $FfmpegCrossCompileFlag \
-  --extra-cflags='$FfmpegTargetCflags /MD -I$VcpkgDependencyRootForMsvc/include' \
+  --extra-cflags='$FfmpegTargetCflags -MD -I$VcpkgDependencyRootForMsvc/include' \
   --extra-ldflags='$FfmpegTargetLdflags $MsvcLibraryFlag $WindowsSdkUcrtLibraryFlag $WindowsSdkUmLibraryFlag /libpath:$LibAliasDirForMsvc /libpath:$VcpkgDependencyRootForMsvc/lib' \
   $FfmpegAssemblyFlag \
 $FfmpegProfileConfigureArgs
