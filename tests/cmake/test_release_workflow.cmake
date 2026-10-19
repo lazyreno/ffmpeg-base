@@ -673,6 +673,7 @@ foreach(validation_marker IN ITEMS
     "f32le")
   require_contains("${validate_script_content}" "${validation_marker}" "SDK validation is missing marker: ${validation_marker}")
 endforeach()
+require_not_contains("${validate_script_content}" "libvpx runtime DLL" "Windows SDK validation must not require a libvpx DLL when libvpx is statically linked")
 
 foreach(raw_pcm_validation_marker IN ITEMS
     "validate_runtime_component"

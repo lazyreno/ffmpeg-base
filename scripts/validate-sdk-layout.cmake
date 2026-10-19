@@ -226,7 +226,9 @@ function(validate_windows_runtime)
         require_path("${SDK_ROOT}/lib/${component}.lib" "${component}.lib")
         require_one_runtime_match("${component}*.dll" "${component} runtime DLL")
     endforeach()
-    require_one_runtime_match("*vpx*.dll" "libvpx runtime DLL")
+    # The Windows vcpkg libvpx port used by this SDK is statically linked.
+    # Validate VP9 through FFmpeg's exposed encoder instead of requiring a
+    # libvpx DLL that is not produced by the package.
     require_one_runtime_match("*opus*.dll" "libopus runtime DLL")
 endfunction()
 
