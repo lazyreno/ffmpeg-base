@@ -31,6 +31,7 @@ function(write_registry_fixture fixture_root volume_symbol include_alac include_
     endif()
     file(WRITE "${fixture_root}/libavcodec/codec_list.c" "
 &ff_mjpeg_encoder,
+&ff_rawvideo_decoder,
 &ff_libx264_encoder,
 &ff_libx265_encoder,
 &ff_pcm_s16le_decoder,
@@ -116,6 +117,14 @@ if(NOT valid_result EQUAL 0)
         "Exact registry fixture must pass:\n"
         "${valid_output}\n${valid_error}")
 endif()
+
+set(missing_rawvideo_fixture "${test_root}/missing-rawvideo")
+write_registry_fixture("${missing_rawvideo_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE TRUE TRUE TRUE)
+set(rawvideo_codec_list "${missing_rawvideo_fixture}/libavcodec/codec_list.c")
+file(READ "${rawvideo_codec_list}" rawvideo_codec_content)
+string(REPLACE "&ff_rawvideo_decoder," "&ff_rawvideo_decoder_alternate," rawvideo_codec_content "${rawvideo_codec_content}")
+file(WRITE "${rawvideo_codec_list}" "${rawvideo_codec_content}")
+expect_missing_registry_symbol("${missing_rawvideo_fixture}" "ff_rawvideo_decoder")
 
 set(missing_alac_fixture "${test_root}/missing-alac")
 write_registry_fixture("${missing_alac_fixture}" "ff_af_volume" FALSE TRUE TRUE TRUE TRUE TRUE TRUE)

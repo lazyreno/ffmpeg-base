@@ -186,6 +186,27 @@ function(validate_ai_stem_export ffmpeg_path ffprobe_path platform_name)
     message(STATUS "${stem_export_output}")
 endfunction()
 
+function(validate_rawvideo_transcode ffmpeg_path ffprobe_path platform_name)
+    validate_runtime_component("${ffmpeg_path}" "-decoders" "rawvideo" "decoder")
+    find_program(PYTHON_EXECUTABLE NAMES python3 python REQUIRED)
+    execute_process(
+        COMMAND "${PYTHON_EXECUTABLE}"
+            "${CMAKE_CURRENT_LIST_DIR}/validate-rawvideo-transcode.py"
+            --ffmpeg "${ffmpeg_path}"
+            --ffprobe "${ffprobe_path}"
+            --platform "${platform_name}"
+        RESULT_VARIABLE transcode_result
+        OUTPUT_VARIABLE transcode_output
+        ERROR_VARIABLE transcode_error
+    )
+    if(NOT transcode_result EQUAL 0)
+        message(FATAL_ERROR
+            "RawVideo transcode validation failed:\n"
+            "${transcode_output}\n${transcode_error}")
+    endif()
+    message(STATUS "${transcode_output}")
+endfunction()
+
 function(validate_runtime_muxer tool_path muxer_name)
     execute_process(
         COMMAND "${tool_path}" -hide_banner -muxers
@@ -310,6 +331,10 @@ if(SDK_PLATFORM STREQUAL "macos")
         "${SDK_ROOT}/bin/ffmpeg"
         "${SDK_ROOT}/bin/ffprobe"
         "${SDK_PLATFORM}-${SDK_ARCH}")
+    validate_rawvideo_transcode(
+        "${SDK_ROOT}/bin/ffmpeg"
+        "${SDK_ROOT}/bin/ffprobe"
+        "${SDK_PLATFORM}-${SDK_ARCH}")
     validate_ai_stem_export(
         "${SDK_ROOT}/bin/ffmpeg"
         "${SDK_ROOT}/bin/ffprobe"
@@ -325,7 +350,8 @@ elseif(SDK_PLATFORM STREQUAL "windows")
 
     validate_windows_runtime()
 
-    if(NOT SDK_ARCH STREQUAL "arm64")
+    cmake_host_system_information(RESULT runtime_host_arch QUERY OS_PLATFORM)
+    if(NOT SDK_ARCH STREQUAL "arm64" OR runtime_host_arch MATCHES "^(ARM64|arm64|aarch64)$")
         validate_runtime_tool("${SDK_ROOT}/bin/ffmpeg.exe" "ffmpeg.exe")
         validate_runtime_tool("${SDK_ROOT}/bin/ffprobe.exe" "ffprobe.exe")
         validate_runtime_muxer("${SDK_ROOT}/bin/ffmpeg.exe" "f32le")
@@ -338,10 +364,16 @@ elseif(SDK_PLATFORM STREQUAL "windows")
             "${SDK_ROOT}/bin/ffmpeg.exe"
             "${SDK_ROOT}/bin/ffprobe.exe"
             "${SDK_PLATFORM}-${SDK_ARCH}")
+        validate_rawvideo_transcode(
+            "${SDK_ROOT}/bin/ffmpeg.exe"
+            "${SDK_ROOT}/bin/ffprobe.exe"
+            "${SDK_PLATFORM}-${SDK_ARCH}")
         validate_ai_stem_export(
             "${SDK_ROOT}/bin/ffmpeg.exe"
             "${SDK_ROOT}/bin/ffprobe.exe"
             "${SDK_PLATFORM}-${SDK_ARCH}")
+    else()
+        message(STATUS "Windows ARM64 runtime checks require a native ARM64 validation host")
     endif()
 else()
     message(FATAL_ERROR "Unsupported SDK_PLATFORM: ${SDK_PLATFORM}")

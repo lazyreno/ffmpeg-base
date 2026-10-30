@@ -60,6 +60,9 @@ require_registry_symbol(
     "ff_mjpeg_encoder" "MJPEG encoder")
 require_registry_symbol(
     "${codec_list}" "${codec_list_content}"
+    "ff_rawvideo_decoder" "RawVideo decoder")
+require_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
     "ff_alac_encoder" "ALAC encoder")
 require_registry_symbol(
     "${codec_list}" "${codec_list_content}"

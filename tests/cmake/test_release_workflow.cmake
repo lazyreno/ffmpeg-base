@@ -14,6 +14,7 @@ set(opencore_amr_port_manifest "${repo_root}/ports/opencore-amr/vcpkg.json")
 set(matrix_script "${repo_root}/scripts/generate-github-matrix.py")
 set(artifact_index_script "${repo_root}/scripts/generate-artifact-index.py")
 set(raw_pcm_validator "${repo_root}/scripts/validate-raw-pcm-transcode.py")
+set(rawvideo_validator "${repo_root}/scripts/validate-rawvideo-transcode.py")
 set(ai_stem_export_validator "${repo_root}/scripts/validate-ai-stem-export.py")
 set(macos_minos_validator "${repo_root}/scripts/validate-macos-sdk-minos.py")
 set(macos_minos_test "${repo_root}/tests/python/test_validate_macos_sdk_minos.py")
@@ -42,6 +43,7 @@ foreach(required_file IN ITEMS
     "${matrix_script}"
     "${artifact_index_script}"
     "${raw_pcm_validator}"
+    "${rawvideo_validator}"
     "${ai_stem_export_validator}"
     "${macos_minos_validator}"
     "${macos_minos_test}"
@@ -158,6 +160,11 @@ foreach(audio_filter IN ITEMS
   require_contains("${profile_content}" "--enable-filter=${audio_filter}" "FFmpeg configure options must enable the ${audio_filter} filter")
 endforeach()
 require_contains("${profile_content}" "\"encoder-mjpeg\"" "FFmpeg feature profile must declare the MJPEG encoder for JPG thumbnail output")
+require_contains("${profile_content}" "\"decoder-rawvideo\"" "FFmpeg feature profile must declare RawVideo decoding")
+require_contains("${profile_content}" "--enable-decoder=rawvideo" "FFmpeg configure must enable RawVideo decoding")
+require_contains("${configure_component_validator_content}" "ff_rawvideo_decoder" "Configure validation must require the RawVideo decoder")
+require_contains("${validate_script_content}" "validate-rawvideo-transcode\\.py" "Staged SDK validation must run a real RawVideo transcode")
+require_contains("${workflow_content}" "test_validate_rawvideo_transcode\\.py" "CI must run RawVideo validator contracts")
 require_contains("${profile_content}" "--enable-encoder=mjpeg" "FFmpeg configure options must enable the MJPEG encoder for JPG thumbnail output")
 
 foreach(video_to_mp3_component IN ITEMS
