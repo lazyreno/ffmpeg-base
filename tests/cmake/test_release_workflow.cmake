@@ -487,6 +487,8 @@ foreach(profile_flag IN ITEMS
     "--enable-muxer=amr"
     "--enable-decoder=h264"
     "--enable-parser=h264"
+    "--enable-bsf=h264_metadata"
+    "--enable-bsf=hevc_metadata"
     "--enable-filter=scale"
     "--enable-gpl"
     "--enable-libx264"
@@ -500,6 +502,7 @@ endforeach()
 
 foreach(profile_feature IN ITEMS
     libx264 libx265 encoder-libx264 encoder-libx265
+    bsf-h264_metadata bsf-hevc_metadata
     encoder-alac libopencore-amrnb encoder-libopencore_amrnb muxer-amr)
   require_contains("${profile_content}" "\"${profile_feature}\"" "FFmpeg profile is missing required common feature: ${profile_feature}")
 endforeach()

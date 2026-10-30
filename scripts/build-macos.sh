@@ -244,6 +244,12 @@ cmake \
   -D CREATED_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
   -P "${ROOT_DIR}/scripts/generate-manifest.cmake"
 
+python3 "${ROOT_DIR}/scripts/validate-ffmpeg-runtime-capabilities.py" \
+  --ffmpeg "${SDK_ROOT}/bin/ffmpeg" \
+  --require-bsf h264_metadata \
+  --require-bsf hevc_metadata \
+  --manifest "${SDK_ROOT}/manifest.json"
+
 cmake \
   -D SDK_ROOT="${SDK_ROOT}" \
   -D SDK_PLATFORM="macos" \
