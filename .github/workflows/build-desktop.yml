@@ -68,6 +68,7 @@ jobs:
           python3 -m unittest tests/python/test_validate_ai_stem_export.py -v
           python3 -m unittest tests/python/test_validate_raw_pcm_transcode.py -v
           python3 -m unittest tests/python/test_validate_rawvideo_transcode.py -v
+          python3 -m unittest tests/python/test_validate_ffmpeg_runtime_capabilities.py -v
           python3 -m unittest tests/python/test_validate_macos_sdk_minos.py -v
           python3 -m unittest tests/python/test_validate_windows_sdk_subsystem.py -v
           cmake -P tests/cmake/test_manifest_metadata.cmake

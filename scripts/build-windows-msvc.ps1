@@ -377,9 +377,11 @@ if (!(Test-Path $StagedFfmpeg)) {
 }
 & $Python $RuntimeCapabilityValidator `
     --ffmpeg $StagedFfmpeg `
-    --require-encoder "libvpx-vp9"
+    --require-encoder "libvpx-vp9" `
+    --require-bsf "h264_metadata" `
+    --require-bsf "hevc_metadata"
 if ($LASTEXITCODE -ne 0) {
-    throw "Windows SDK runtime encoder validation failed"
+    throw "Windows SDK runtime capability validation failed"
 }
 
 $Dumpbin = (Get-Command dumpbin -ErrorAction Stop).Path
@@ -417,6 +419,8 @@ if ($LASTEXITCODE -ne 0) {
 & $Python $RuntimeCapabilityValidator `
     --ffmpeg $StagedFfmpeg `
     --require-encoder "libvpx-vp9" `
+    --require-bsf "h264_metadata" `
+    --require-bsf "hevc_metadata" `
     --manifest (Join-Path $SdkRoot "manifest.json")
 if ($LASTEXITCODE -ne 0) {
     throw "Windows SDK manifest/runtime capability validation failed"
