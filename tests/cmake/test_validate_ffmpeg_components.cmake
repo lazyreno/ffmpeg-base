@@ -32,6 +32,8 @@ function(write_registry_fixture fixture_root volume_symbol include_alac include_
     file(WRITE "${fixture_root}/libavcodec/codec_list.c" "
 &ff_mjpeg_encoder,
 &ff_rawvideo_decoder,
+&ff_prores_decoder,
+&ff_adpcm_ima_wav_decoder,
 &ff_libx264_encoder,
 &ff_libx265_encoder,
 &ff_pcm_s16le_decoder,
@@ -125,6 +127,16 @@ file(READ "${rawvideo_codec_list}" rawvideo_codec_content)
 string(REPLACE "&ff_rawvideo_decoder," "&ff_rawvideo_decoder_alternate," rawvideo_codec_content "${rawvideo_codec_content}")
 file(WRITE "${rawvideo_codec_list}" "${rawvideo_codec_content}")
 expect_missing_registry_symbol("${missing_rawvideo_fixture}" "ff_rawvideo_decoder")
+
+foreach(decoder IN ITEMS prores adpcm_ima_wav)
+    set(missing_decoder_fixture "${test_root}/missing-${decoder}")
+    write_registry_fixture("${missing_decoder_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE TRUE TRUE TRUE)
+    set(decoder_codec_list "${missing_decoder_fixture}/libavcodec/codec_list.c")
+    file(READ "${decoder_codec_list}" decoder_codec_content)
+    string(REPLACE "&ff_${decoder}_decoder," "" decoder_codec_content "${decoder_codec_content}")
+    file(WRITE "${decoder_codec_list}" "${decoder_codec_content}")
+    expect_missing_registry_symbol("${missing_decoder_fixture}" "ff_${decoder}_decoder")
+endforeach()
 
 set(missing_alac_fixture "${test_root}/missing-alac")
 write_registry_fixture("${missing_alac_fixture}" "ff_af_volume" FALSE TRUE TRUE TRUE TRUE TRUE TRUE)

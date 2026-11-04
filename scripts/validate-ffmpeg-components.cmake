@@ -63,6 +63,12 @@ require_registry_symbol(
     "ff_rawvideo_decoder" "RawVideo decoder")
 require_registry_symbol(
     "${codec_list}" "${codec_list_content}"
+    "ff_prores_decoder" "ProRes decoder")
+require_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
+    "ff_adpcm_ima_wav_decoder" "IMA ADPCM decoder")
+require_registry_symbol(
+    "${codec_list}" "${codec_list_content}"
     "ff_alac_encoder" "ALAC encoder")
 require_registry_symbol(
     "${codec_list}" "${codec_list_content}"
