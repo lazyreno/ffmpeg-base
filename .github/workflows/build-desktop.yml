@@ -77,6 +77,8 @@ jobs:
     name: ${{ matrix.key }} preflight
     needs: prepare-matrix
     runs-on: ${{ matrix.runner }}
+    env:
+      VCPKG_DOWNLOADS: ${{ github.workspace }}/.vcpkg-root/downloads
     timeout-minutes: 360
     strategy:
       fail-fast: false
@@ -117,6 +119,7 @@ jobs:
           path-type: inherit
           update: true
           cache: false
+          release: false
           install: >-
             base-devel
             diffutils
@@ -198,7 +201,9 @@ jobs:
 
       - name: Bootstrap pinned vcpkg on macOS
         if: matrix.buildFamily == 'macos'
-        run: ./.vcpkg-root/bootstrap-vcpkg.sh -disableMetrics
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/bootstrap-pinned-vcpkg-macos.sh --vcpkg-root .vcpkg-root
 
       - name: Bootstrap pinned vcpkg on Windows
         if: matrix.buildFamily == 'windows-msvc'
@@ -208,6 +213,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
+
+      - name: Cache pinned vcpkg build tools on macOS
+        if: matrix.buildFamily == 'macos'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/prefetch-vcpkg-tools.py --vcpkg-root .vcpkg-root --os macos --arch "${{ matrix.arch }}"
+
+      - name: Cache pinned vcpkg build tools on Windows
+        if: matrix.buildFamily == 'windows-msvc'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/prefetch-vcpkg-tools.py --vcpkg-root .vcpkg-root --os windows --arch "${{ matrix.arch }}"
 
       - name: Install macOS x64 assembler tool
         if: matrix.buildFamily == 'macos' && matrix.arch == 'x86_64'
@@ -226,7 +244,9 @@ jobs:
           cmake --version
           bash --version
           python --version
-          nasm -v
+          if ("${{ matrix.arch }}" -eq "x86_64") {
+            & $env:FFMPEG_NASM -v
+          }
           Write-Host "ImageOS=$env:ImageOS ImageVersion=$env:ImageVersion"
           Write-Host "VS=$env:VSINSTALLDIR MSVC=$env:VCToolsVersion WindowsSDK=$env:WindowsSDKVersion"
           Get-PSDrive -Name C
@@ -312,6 +332,8 @@ jobs:
     needs: [prepare-matrix, preflight-sdk]
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'candidate'
     runs-on: ${{ matrix.runner }}
+    env:
+      VCPKG_DOWNLOADS: ${{ github.workspace }}/.vcpkg-root/downloads
     timeout-minutes: 360
     strategy:
       fail-fast: false
@@ -352,6 +374,7 @@ jobs:
           path-type: inherit
           update: true
           cache: false
+          release: false
           install: >-
             base-devel
             diffutils
@@ -433,7 +456,9 @@ jobs:
 
       - name: Bootstrap pinned vcpkg on macOS
         if: matrix.buildFamily == 'macos'
-        run: ./.vcpkg-root/bootstrap-vcpkg.sh -disableMetrics
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/bootstrap-pinned-vcpkg-macos.sh --vcpkg-root .vcpkg-root
 
       - name: Bootstrap pinned vcpkg on Windows
         if: matrix.buildFamily == 'windows-msvc'
@@ -443,6 +468,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
+
+      - name: Cache pinned vcpkg build tools on macOS
+        if: matrix.buildFamily == 'macos'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/prefetch-vcpkg-tools.py --vcpkg-root .vcpkg-root --os macos --arch "${{ matrix.arch }}"
+
+      - name: Cache pinned vcpkg build tools on Windows
+        if: matrix.buildFamily == 'windows-msvc'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/prefetch-vcpkg-tools.py --vcpkg-root .vcpkg-root --os windows --arch "${{ matrix.arch }}"
 
       - name: Install macOS x64 assembler tool
         if: matrix.buildFamily == 'macos' && matrix.arch == 'x86_64'
@@ -461,7 +499,9 @@ jobs:
           cmake --version
           bash --version
           python --version
-          nasm -v
+          if ("${{ matrix.arch }}" -eq "x86_64") {
+            & $env:FFMPEG_NASM -v
+          }
           Write-Host "ImageOS=$env:ImageOS ImageVersion=$env:ImageVersion"
           Write-Host "VS=$env:VSINSTALLDIR MSVC=$env:VCToolsVersion WindowsSDK=$env:WindowsSDKVersion"
           Get-PSDrive -Name C

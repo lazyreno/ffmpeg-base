@@ -38,6 +38,16 @@ class CloudBuildMatrixTest(unittest.TestCase):
         self.assertNotIn("publish-release:", workflow)
         self.assertNotIn('      - "v*"', workflow)
 
+    def test_preflight_uses_runner_msys2_and_pinned_macos_tool_asset(self):
+        workflow = (ROOT / ".github/workflows/build-desktop.yml").read_text()
+        self.assertEqual(2, workflow.count("release: false"))
+        self.assertEqual(2, workflow.count("scripts/bootstrap-pinned-vcpkg-macos.sh"))
+        self.assertEqual(2, workflow.count("& $env:FFMPEG_NASM -v"))
+        self.assertNotIn("\n          nasm -v\n", workflow)
+        self.assertEqual(2, workflow.count("VCPKG_DOWNLOADS: ${{ github.workspace }}/.vcpkg-root/downloads"))
+        self.assertEqual(2, workflow.count("python3 scripts/prefetch-vcpkg-tools.py"))
+        self.assertEqual(2, workflow.count("python scripts/prefetch-vcpkg-tools.py"))
+
 
 if __name__ == "__main__":
     unittest.main()
