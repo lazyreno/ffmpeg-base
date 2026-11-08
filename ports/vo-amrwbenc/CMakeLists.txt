@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.21)
+project(vo-amrwbenc LANGUAGES C)
+file(GLOB ENCODER_SOURCES CONFIGURE_DEPENDS "amrwbenc/src/*.c")
+add_library(vo-amrwbenc wrapper.c common/cmnMemory.c ${ENCODER_SOURCES})
+target_include_directories(vo-amrwbenc PRIVATE amrwbenc/inc common/include)
+set_target_properties(vo-amrwbenc PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+install(TARGETS vo-amrwbenc RUNTIME DESTINATION bin LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
+install(FILES enc_if.h DESTINATION include/vo-amrwbenc)

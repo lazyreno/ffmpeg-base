@@ -3,5 +3,6 @@
   "version-string": "0.1.3",
   "description": "VisualOn AMR-WB encoder",
   "homepage": "https://sourceforge.net/projects/opencore-amr/",
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "dependencies": [{ "name": "vcpkg-cmake", "host": true, "platform": "windows" }]
 }

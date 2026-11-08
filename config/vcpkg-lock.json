@@ -1,4 +1,9 @@
 {
   "repository": "https://github.com/microsoft/vcpkg.git",
-  "commit": "1b31135aadd41bfd2c9e76d06b5f815e54a0adea"
+  "commit": "1b31135aadd41bfd2c9e76d06b5f815e54a0adea",
+  "toolRelease": "2026-05-27",
+  "windowsToolSha512": {
+    "x86_64": "b3e4d0518d231de6d45d54fe3b4540cd1c526e917c5b0b3105a1f929964b8b81de3420428655a23be7cc7447e5f562448a21f30769616fd83fa9f307fe24f41c",
+    "arm64": "8758ac416d72cc9bbf2b10adbbf535363954fa33c61fc7e626ba29545396401f625579d01bebd6be3d4c2050677e5aa2bd5f5fe8cb3827e9acfa2cae02acbce1"
+  }
 }

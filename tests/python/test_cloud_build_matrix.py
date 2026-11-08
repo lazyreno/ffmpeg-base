@@ -29,24 +29,26 @@ class CloudBuildMatrixTest(unittest.TestCase):
         for item in platforms.values():
             self.assertNotIn("profile", item)
 
-    def test_candidate_build_is_explicit_and_never_publishes(self):
+    def test_manual_build_uses_generated_matrix_without_preflight_or_publish(self):
         workflow = (ROOT / ".github/workflows/build-desktop.yml").read_text()
-        self.assertIn("preflight-sdk:", workflow)
-        self.assertIn("needs: [prepare-matrix, preflight-sdk]", workflow)
-        self.assertIn("inputs.mode == 'candidate'", workflow)
-        self.assertIn("default: preflight", workflow)
+        self.assertNotIn("preflight-sdk:", workflow)
+        self.assertIn("needs: prepare-matrix", workflow)
+        self.assertIn("if: github.event_name == 'workflow_dispatch'", workflow)
         self.assertNotIn("publish-release:", workflow)
         self.assertNotIn('      - "v*"', workflow)
 
-    def test_preflight_uses_runner_msys2_and_pinned_macos_tool_asset(self):
+    def test_build_prepares_pinned_tools_and_macos_autotools(self):
         workflow = (ROOT / ".github/workflows/build-desktop.yml").read_text()
-        self.assertEqual(2, workflow.count("release: false"))
-        self.assertEqual(2, workflow.count("scripts/bootstrap-pinned-vcpkg-macos.sh"))
-        self.assertEqual(2, workflow.count("& $env:FFMPEG_NASM -v"))
+        self.assertEqual(1, workflow.count("release: false"))
+        self.assertEqual(1, workflow.count("scripts/bootstrap-pinned-vcpkg-macos.sh"))
+        self.assertEqual(1, workflow.count("scripts/bootstrap-pinned-vcpkg-windows.py"))
+        self.assertEqual(1, workflow.count("& $env:FFMPEG_NASM -v"))
         self.assertNotIn("\n          nasm -v\n", workflow)
-        self.assertEqual(2, workflow.count("VCPKG_DOWNLOADS: ${{ github.workspace }}/.vcpkg-root/downloads"))
-        self.assertEqual(2, workflow.count("python3 scripts/prefetch-vcpkg-tools.py"))
-        self.assertEqual(2, workflow.count("python scripts/prefetch-vcpkg-tools.py"))
+        self.assertEqual(1, workflow.count("VCPKG_DOWNLOADS: ${{ github.workspace }}/.vcpkg-root/downloads"))
+        self.assertEqual(1, workflow.count("python3 scripts/prefetch-vcpkg-tools.py"))
+        self.assertEqual(1, workflow.count("python scripts/prefetch-vcpkg-tools.py"))
+        self.assertIn("brew install autoconf autoconf-archive automake libtool", workflow)
+        self.assertIn("glibtoolize", workflow)
 
 
 if __name__ == "__main__":

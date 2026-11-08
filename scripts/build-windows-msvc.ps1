@@ -330,10 +330,6 @@ if ! cmake \
   grep -n -C 32 "check_pkg_config libvpx_vp9_encoder" ffbuild/config.log >&2 || cat ffbuild/config.log >&2 || true
   exit 1
 fi
-if [[ "`${SDK_CONFIGURE_ONLY:-0}" == "1" ]]; then
-  echo 'Configure-only preflight passed for $PlatformKey.'
-  exit 0
-fi
 make -j`$(nproc)
 find . -name '*.d' -delete
 make install
@@ -365,11 +361,6 @@ bash --login "$ConfigureScriptPath"
 if ($LASTEXITCODE -ne 0) {
     throw "FFmpeg Windows MSVC build failed"
 }
-if ($env:SDK_CONFIGURE_ONLY -eq "1") {
-    Write-Host "Configure-only preflight passed for $PlatformKey."
-    exit 0
-}
-
 bash "$MsysRootDir/scripts/stage-sdk.sh" `
     --source "$MsysSourceDir" `
     --prefix "$MsysInstallPrefix" `

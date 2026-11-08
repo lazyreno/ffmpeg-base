@@ -201,11 +201,6 @@ cmake \
   -D SDK_ARCH="${SDK_ARCH}" \
   -P "${ROOT_DIR}/scripts/validate-ffmpeg-components.cmake"
 
-if [[ "${SDK_CONFIGURE_ONLY:-0}" == "1" ]]; then
-  echo "Configure-only preflight passed for ${PLATFORM_KEY}."
-  exit 0
-fi
-
 make -j"$(sysctl -n hw.ncpu)"
 make install
 popd >/dev/null

@@ -22,6 +22,11 @@ class DependencyPortsTest(unittest.TestCase):
                 self.assertIn("vcpkg_install_copyright", recipe)
                 if name in ("libgsm", "zimg"):
                     self.assertIn("-DBUILD_SHARED_LIBS=ON", recipe)
+                if name == "vo-amrwbenc":
+                    self.assertIn("if(VCPKG_TARGET_IS_WINDOWS)", recipe)
+                    self.assertIn("vcpkg_cmake_install()", recipe)
+                    self.assertIn("vcpkg_install_make()", recipe)
+                    self.assertIn("WINDOWS_EXPORT_ALL_SYMBOLS ON", (port / "CMakeLists.txt").read_text())
 
     def test_amr_nb_and_wb_have_one_port_and_two_checks(self):
         manifest = json.loads((ROOT / "vcpkg.json").read_text())

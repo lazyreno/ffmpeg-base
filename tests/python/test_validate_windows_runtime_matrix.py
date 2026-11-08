@@ -9,10 +9,10 @@ BUILD_SCRIPT = REPO_ROOT / "scripts" / "build-windows-msvc.ps1"
 
 
 class WindowsRuntimeMatrixTest(unittest.TestCase):
-    def test_v2_configure_only_uses_one_profile_and_native_arm64(self):
+    def test_v2_build_uses_one_profile_and_native_arm64(self):
         script = BUILD_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("$ProfileConfig.configure.windows_x86_64", script)
-        self.assertIn("SDK_CONFIGURE_ONLY", script)
+        self.assertNotIn("SDK_CONFIGURE_ONLY", script)
         self.assertIn("SDK_ARCH=$SdkArch", script)
         self.assertNotIn("$ProfileConfig.features", script)
         self.assertNotIn("$FeaturesJson", script)
