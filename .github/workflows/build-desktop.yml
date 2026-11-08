@@ -19,6 +19,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
     paths:
       - ".github/workflows/build-desktop.yml"
       - "cmake-package/**"
@@ -67,7 +69,6 @@ jobs:
   build-sdk:
     name: ${{ matrix.key }} SDK
     needs: prepare-matrix
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.runner }}
     env:
       VCPKG_DOWNLOADS: ${{ github.workspace }}/.vcpkg-root/downloads
@@ -288,9 +289,11 @@ jobs:
         shell: pwsh
         env:
           VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-binary-cache,readwrite
-          X_VCPKG_ASSET_SOURCES: x-script,python ${{ github.workspace }}/scripts/fetch-vcpkg-github-asset.py {url} {sha512} {dst}
           GH_TOKEN: ${{ github.token }}
         run: |
+          $python = (Get-Command python -ErrorAction Stop).Source
+          $assetScript = Join-Path $env:GITHUB_WORKSPACE 'scripts\fetch-vcpkg-github-asset.py'
+          $env:X_VCPKG_ASSET_SOURCES = "x-script,$python $assetScript {url} {sha512} {dst}"
           $vcpkgRoot = "${{ github.workspace }}\.vcpkg-root"
           & "$vcpkgRoot\vcpkg.exe" install `
             --dry-run `
@@ -360,12 +363,14 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  package-candidate:
-    name: Package unpublished SDK candidate
-    if: github.event_name == 'workflow_dispatch'
+  publish-release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     needs: [prepare-matrix, build-sdk]
     timeout-minutes: 15
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -380,7 +385,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p staged-sdks candidate-assets
+          mkdir -p staged-sdks release-assets
           for transfer_dir in staged-transfer/*; do
             [[ -d "${transfer_dir}" ]] || continue
             transfer_archive="$(find "${transfer_dir}" -maxdepth 1 -type f -name 'ffmpeg-sdk-*.tar' -print -quit)"
@@ -397,27 +402,36 @@ jobs:
               echo "Downloaded SDK artifact is missing manifest.json: ${sdk_dir}" >&2
               exit 1
             }
-            (cd staged-sdks && zip -qr "../candidate-assets/${sdk_name}.zip" "${sdk_name}")
-            sha256sum "candidate-assets/${sdk_name}.zip" > "candidate-assets/${sdk_name}.zip.sha256"
+            (cd staged-sdks && zip -qr "../release-assets/${sdk_name}.zip" "${sdk_name}")
+            sha256sum "release-assets/${sdk_name}.zip" > "release-assets/${sdk_name}.zip.sha256"
           done
 
-      - name: Generate candidate index
+      - name: Validate release tag and generate artifact index
         shell: bash
         run: |
           set -euo pipefail
           sdk_version="${{ needs.prepare-matrix.outputs.sdk_version }}"
+          release_tag="${GITHUB_REF_NAME}"
+          [[ "${release_tag}" == "v${sdk_version}" ]] || {
+            echo "release tag must match sdkVersion: expected v${sdk_version}, got ${release_tag}" >&2
+            exit 1
+          }
           python3 scripts/generate-artifact-index.py \
-            --release-assets candidate-assets \
-            --output candidate-assets/artifact-index.json \
-            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${sdk_version}" \
-            --release-tag "v${sdk_version}"
-          python3 scripts/validate-candidate-assets.py --assets candidate-assets
+            --release-assets release-assets \
+            --output release-assets/artifact-index.json \
+            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${release_tag}" \
+            --release-tag "${release_tag}"
+          python3 scripts/validate-release-assets.py --assets release-assets
 
-      - name: Upload unpublished candidate
-        uses: actions/upload-artifact@v7
-        with:
-          name: ffmpeg-sdk-v2-candidate
-          path: candidate-assets/*
-          archive: false
-          if-no-files-found: error
-          retention-days: 14
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_version="${{ needs.prepare-matrix.outputs.sdk_version }}"
+          release_tag="${GITHUB_REF_NAME}"
+          gh release create "${release_tag}" release-assets/* \
+            --target "${GITHUB_SHA}" \
+            --title "FFmpeg SDK v${sdk_version}" \
+            --notes "FFmpeg SDK v${sdk_version}."

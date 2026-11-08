@@ -29,15 +29,17 @@ class CloudBuildMatrixTest(unittest.TestCase):
         for item in platforms.values():
             self.assertNotIn("profile", item)
 
-    def test_manual_build_uses_generated_matrix_without_preflight_or_publish(self):
+    def test_tag_release_build_uses_generated_matrix_without_preflight(self):
         workflow = (ROOT / ".github/workflows/build-desktop.yml").read_text()
         self.assertNotIn("preflight-sdk:", workflow)
         self.assertNotIn("Require dependency cache from preflight", workflow)
         self.assertNotIn("steps.vcpkg-cache.outputs.cache-hit != 'true'", workflow)
         self.assertIn("needs: prepare-matrix", workflow)
-        self.assertIn("if: github.event_name == 'workflow_dispatch'", workflow)
-        self.assertNotIn("publish-release:", workflow)
-        self.assertNotIn('      - "v*"', workflow)
+        self.assertNotIn("if: github.event_name == 'workflow_dispatch'", workflow)
+        self.assertIn('      - "v*"', workflow)
+        self.assertIn("publish-release:", workflow)
+        self.assertIn("if: startsWith(github.ref, 'refs/tags/v')", workflow)
+        self.assertNotIn("package-candidate:", workflow)
 
     def test_build_prepares_pinned_tools_and_macos_autotools(self):
         workflow = (ROOT / ".github/workflows/build-desktop.yml").read_text()
@@ -53,6 +55,9 @@ class CloudBuildMatrixTest(unittest.TestCase):
         self.assertIn("glibtoolize", workflow)
         self.assertIn("X_VCPKG_ASSET_SOURCES", workflow)
         self.assertIn("fetch-vcpkg-github-asset.py", workflow)
+        self.assertIn("(Get-Command python -ErrorAction Stop).Source", workflow)
+        self.assertIn('$env:X_VCPKG_ASSET_SOURCES = "x-script,$python', workflow)
+        self.assertNotIn("X_VCPKG_ASSET_SOURCES: x-script,python ${{ github.workspace }}", workflow)
 
 
 if __name__ == "__main__":

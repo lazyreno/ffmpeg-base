@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check candidate ZIP contents against the v2 platform declarations."""
+"""Check release ZIP contents against the v2 platform declarations."""
 
 import argparse
 import json
@@ -48,7 +48,7 @@ def validate_archive(archive: Path, platform: dict, sdk: dict) -> list[str]:
             if not any(member.startswith(f"{root}/licenses/") for member in members):
                 errors.append(f"{archive.name}: missing licenses")
     except (OSError, zipfile.BadZipFile, KeyError, json.JSONDecodeError) as error:
-        errors.append(f"{archive.name}: unreadable candidate archive: {error}")
+        errors.append(f"{archive.name}: unreadable release archive: {error}")
     return errors
 
 
