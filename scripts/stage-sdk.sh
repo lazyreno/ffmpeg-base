@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: stage-sdk.sh --source <ffmpeg-source> --prefix <install-prefix> --output <sdk-root> --platform <platform> --arch <arch>
+Usage: stage-sdk.sh --source <ffmpeg-source> --prefix <install-prefix> --output <sdk-root> --platform <platform> --arch <arch> --vcpkg-root <installed-triplet>
 EOF
 }
 
@@ -12,6 +12,7 @@ INSTALL_PREFIX=""
 SDK_ROOT=""
 SDK_PLATFORM=""
 SDK_ARCH=""
+VCPKG_DEPENDENCY_ROOT=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -20,6 +21,7 @@ while [[ $# -gt 0 ]]; do
     --output) SDK_ROOT="$2"; shift 2 ;;
     --platform) SDK_PLATFORM="$2"; shift 2 ;;
     --arch) SDK_ARCH="$2"; shift 2 ;;
+    --vcpkg-root) VCPKG_DEPENDENCY_ROOT="$2"; shift 2 ;;
     *) usage; exit 2 ;;
   esac
 done
@@ -27,6 +29,7 @@ done
 [[ -n "${SOURCE_DIR}" && -d "${SOURCE_DIR}" ]] || { usage; exit 2; }
 [[ -n "${INSTALL_PREFIX}" && -d "${INSTALL_PREFIX}" ]] || { usage; exit 2; }
 [[ -n "${SDK_ROOT}" ]] || { usage; exit 2; }
+[[ -d "${VCPKG_DEPENDENCY_ROOT}/share" ]] || { usage; exit 2; }
 case "${SDK_PLATFORM}:${SDK_ARCH}" in
   macos:arm64|macos:x86_64|windows:x86_64|windows:arm64) ;;
   *)
@@ -69,12 +72,22 @@ rewrite_macos_runtime_paths() {
       install_name_tool \
         -change "${dependency_path}" "@loader_path/${dependency_name}" \
         "${binary}"
-    elif [[ -f "${dependency_path}" ]] && is_macos_external_dependency "$(basename "${dependency_path}")"; then
+    elif [[ "${dependency_path}" == "${VCPKG_DEPENDENCY_ROOT}/lib/"* ||
+            "${dependency_path}" == @rpath/* ]]; then
       dependency_name="$(basename "${dependency_path}")"
-      stage_macos_external_dependency "${dependency_path}"
+      if [[ ! -f "${SDK_ROOT}/bin/${dependency_name}" ]]; then
+        stage_macos_external_dependency "${VCPKG_DEPENDENCY_ROOT}/lib/${dependency_name}"
+      fi
       install_name_tool \
         -change "${dependency_path}" "@loader_path/${dependency_name}" \
         "${binary}"
+    elif [[ "${dependency_path}" == /System/Library/* ||
+            "${dependency_path}" == /usr/lib/* ||
+            "${dependency_path}" == @loader_path/* ]]; then
+      continue
+    else
+      echo "Unexpected macOS runtime dependency in ${binary}: ${dependency_path}" >&2
+      exit 1
     fi
   done < <(otool -L "${binary}" | tail -n +2)
 }
@@ -92,22 +105,15 @@ ad_hoc_sign_macos_runtime_files() {
   done < <(find "${SDK_ROOT}/bin" "${SDK_ROOT}/lib" -maxdepth 1 -type f \( -name "ffmpeg" -o -name "ffprobe" -o -name "*.dylib" \))
 }
 
-is_macos_external_dependency() {
-  case "$1" in
-    libmp3lame*.dylib|libvpx*.dylib|libaom*.dylib|libopus*.dylib|libvorbis*.dylib|libogg*.dylib|libopencore-amrnb*.dylib|libx264*.dylib|libx265*.dylib)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
-
 stage_macos_external_dependency() {
   local dependency_path="$1"
   local dependency_name
   local staged_path
-  local dependency_prefix
+
+  [[ -f "${dependency_path}" ]] || {
+    echo "Missing vcpkg runtime dylib: ${dependency_path}" >&2
+    exit 1
+  }
 
   dependency_name="$(basename "${dependency_path}")"
   staged_path="${SDK_ROOT}/bin/${dependency_name}"
@@ -117,34 +123,6 @@ stage_macos_external_dependency() {
     install_name_tool -id "@loader_path/${dependency_name}" "${staged_path}"
   fi
 
-  dependency_prefix="$(cd "$(dirname "${dependency_path}")/.." && pwd)"
-  case "${dependency_name}" in
-    libmp3lame*.dylib) license_output_name="LICENSE.lame.txt"; package_name="mp3lame" ;;
-    libvpx*.dylib) license_output_name="LICENSE.libvpx.txt"; package_name="libvpx" ;;
-    libaom*.dylib) license_output_name="LICENSE.aom.txt"; package_name="aom" ;;
-    libopus*.dylib) license_output_name="LICENSE.opus.txt"; package_name="opus" ;;
-    libvorbis*.dylib) license_output_name="LICENSE.libvorbis.txt"; package_name="libvorbis" ;;
-    libogg*.dylib) license_output_name="LICENSE.libogg.txt"; package_name="libogg" ;;
-    libopencore-amrnb*.dylib) license_output_name="LICENSE.opencore-amr.txt"; package_name="opencore-amr" ;;
-    libx264*.dylib) license_output_name="LICENSE.x264.txt"; package_name="x264" ;;
-    libx265*.dylib) license_output_name="LICENSE.x265.txt"; package_name="x265" ;;
-    *) license_output_name=""; package_name="" ;;
-  esac
-  if [[ -n "${license_output_name}" ]]; then
-    for license_file in COPYING LICENSE LICENSE.md COPYING.txt; do
-      if [[ -f "${dependency_prefix}/${license_file}" ]]; then
-        cp -p "${dependency_prefix}/${license_file}" "${SDK_ROOT}/licenses/${license_output_name}"
-        break
-      fi
-    done
-    if [[ ! -f "${SDK_ROOT}/licenses/${license_output_name}" ]]; then
-      {
-        echo "Third-party runtime: ${dependency_name}"
-        echo "vcpkg package: ${package_name}"
-        echo "License metadata: see vcpkg package copyright when available"
-      } > "${SDK_ROOT}/licenses/${license_output_name}"
-    fi
-  fi
 }
 
 if [[ "${SDK_PLATFORM}" == "macos" ]]; then
@@ -156,9 +134,26 @@ if [[ "${SDK_PLATFORM}" == "macos" ]]; then
   rewrite_macos_runtime_paths "${SDK_ROOT}/bin/ffmpeg"
   rewrite_macos_runtime_paths "${SDK_ROOT}/bin/ffprobe"
 
-  while IFS= read -r binary; do
-    rewrite_macos_runtime_paths "${binary}"
-  done < <(find "${SDK_ROOT}/bin" "${SDK_ROOT}/lib" -maxdepth 1 -type f -name "*.dylib")
+  processed_paths=$'\n'
+  while true; do
+    pending=0
+    while IFS= read -r binary; do
+      [[ "${processed_paths}" == *$'\n'"${binary}"$'\n'* ]] && continue
+      rewrite_macos_runtime_paths "${binary}"
+      processed_paths+="${binary}"$'\n'
+      pending=1
+    done < <(find "${SDK_ROOT}/bin" "${SDK_ROOT}/lib" -maxdepth 1 -type f -name "*.dylib")
+    [[ "${pending}" -eq 1 ]] || break
+  done
+
+  # The CMake link directory and the executable directory must each resolve
+  # @loader_path dependencies without referring back to the build machine.
+  for binary in "${SDK_ROOT}/bin/"*.dylib; do
+    [[ -f "${binary}" ]] || continue
+    if [[ ! -e "${SDK_ROOT}/lib/$(basename "${binary}")" ]]; then
+      cp -p "${binary}" "${SDK_ROOT}/lib/"
+    fi
+  done
 
   ad_hoc_sign_macos_runtime_files
 fi
@@ -167,6 +162,16 @@ cp -p "${SOURCE_DIR}/LICENSE.md" "${SDK_ROOT}/licenses/LICENSE.ffmpeg.txt"
 if [[ -d "${INSTALL_PREFIX}/licenses" ]]; then
   cp -R "${INSTALL_PREFIX}/licenses/." "${SDK_ROOT}/licenses/"
 fi
+for package_dir in "${VCPKG_DEPENDENCY_ROOT}"/share/*; do
+  [[ -d "${package_dir}" ]] || continue
+  [[ -s "${package_dir}/copyright" ]] || {
+    echo "Missing vcpkg copyright: ${package_dir}/copyright" >&2
+    exit 1
+  }
+  package_name="$(basename "${package_dir}")"
+  mkdir -p "${SDK_ROOT}/licenses/${package_name}"
+  cp -p "${package_dir}/copyright" "${SDK_ROOT}/licenses/${package_name}/LICENSE"
+done
 for license_file in COPYING.GPLv2 COPYING.GPLv3 COPYING.LGPLv2.1 COPYING.LGPLv3; do
   if [[ -f "${SOURCE_DIR}/${license_file}" ]]; then
     cp -p "${SOURCE_DIR}/${license_file}" "${SDK_ROOT}/licenses/${license_file}"

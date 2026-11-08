@@ -1,6 +1,6 @@
 {
   "name": "ffmpeg-base-sdk-deps",
-  "version-string": "20260706.1",
+  "version-string": "20261108.1",
   "dependencies": [
     "mp3lame",
     "libvpx",
@@ -10,6 +10,28 @@
     "opencore-amr",
     "x264",
     "x265",
-    "zlib"
+    "zlib",
+    "bzip2",
+    "liblzma",
+    "libiconv",
+    "libxml2",
+    "dav1d",
+    "libwebp",
+    "libjxl",
+    "openjpeg",
+    "vo-amrwbenc",
+    "speex",
+    "libgsm",
+    "libass",
+    "freetype",
+    "harfbuzz",
+    "fontconfig",
+    "fribidi",
+    "soxr",
+    "rubberband",
+    "zimg",
+    "svt-av1",
+    "libopenmpt",
+    "libgme"
   ]
 }

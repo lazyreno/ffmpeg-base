@@ -1,0 +1,8 @@
+{
+  "name": "libgsm",
+  "version-string": "1.0.22",
+  "description": "GSM 06.10 audio codec library",
+  "homepage": "https://www.quut.com/gsm/",
+  "license": "ISC",
+  "dependencies": [{ "name": "vcpkg-cmake", "host": true }]
+}

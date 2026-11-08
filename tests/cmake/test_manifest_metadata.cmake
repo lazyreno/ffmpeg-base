@@ -20,9 +20,9 @@ execute_process(
         -D "VCPKG_TRIPLET=arm64-osx"
         -D "FFMPEG_SOURCE_URL=https://example.invalid/ffmpeg.tar.xz"
         -D "FFMPEG_SOURCE_SHA256=1111111111111111111111111111111111111111111111111111111111111111"
-        -D "SDK_FEATURES_JSON=[]"
+        -D "FEATURE_PROFILE=gpl-desktop-media-v2"
+        -D "SDK_EXTERNAL_DEPENDENCIES_JSON=[\"zlib\"]"
         -D "LICENSE_MODE=gpl"
-        -D "ARTIFACT_PROFILE=legacy"
         -D "MINIMUM_SYSTEM_VERSION=11.0"
         -D "BUILD_ID=fixture-1"
         -D "CREATED_AT=2026-08-05T00:00:00Z"
@@ -36,13 +36,25 @@ endif()
 
 file(READ "${manifest_output}" manifest_json)
 string(JSON profile ERROR_VARIABLE profile_error GET "${manifest_json}" profile)
-if(NOT profile_error STREQUAL "NOTFOUND")
-    message(FATAL_ERROR "Manifest must contain profile: ${profile_error}")
+if(profile_error STREQUAL "NOTFOUND")
+    message(FATAL_ERROR "Manifest must not contain an artifact profile")
 endif()
 string(JSON minimum_version ERROR_VARIABLE minimum_version_error GET "${manifest_json}" minimumSystemVersion)
 if(NOT minimum_version_error STREQUAL "NOTFOUND")
     message(FATAL_ERROR "Manifest must contain minimumSystemVersion: ${minimum_version_error}")
 endif()
-if(NOT profile STREQUAL "legacy" OR NOT minimum_version STREQUAL "11.0")
-    message(FATAL_ERROR "Manifest must preserve legacy profile and minimum system version")
+if(NOT minimum_version STREQUAL "11.0")
+    message(FATAL_ERROR "Manifest must preserve minimum system version")
+endif()
+string(JSON feature_profile GET "${manifest_json}" featureProfile)
+if(NOT feature_profile STREQUAL "gpl-desktop-media-v2")
+    message(FATAL_ERROR "Manifest must use the v2 feature profile")
+endif()
+string(JSON legacy_features ERROR_VARIABLE features_error GET "${manifest_json}" features)
+if(features_error STREQUAL "NOTFOUND")
+    message(FATAL_ERROR "Manifest must not contain legacy features")
+endif()
+string(JSON components_file GET "${manifest_json}" componentsFile)
+if(NOT components_file STREQUAL "components.json")
+    message(FATAL_ERROR "Manifest must reference components.json")
 endif()

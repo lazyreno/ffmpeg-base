@@ -129,20 +129,14 @@ function(validate_software_runtime_capabilities tool_path)
         validate_runtime_component("${tool_path}" "-encoders" "${software_encoder}" "encoder")
     endforeach()
 
-    foreach(hardware_encoder IN ITEMS
-            h264_videotoolbox
-            hevc_videotoolbox
-            h264_mf
-            hevc_mf)
-        reject_runtime_component("${tool_path}" "-encoders" "${hardware_encoder}" "encoder")
-    endforeach()
-
-    foreach(hardware_accelerator IN ITEMS videotoolbox mediafoundation d3d11va)
-        reject_runtime_component("${tool_path}" "-hwaccels" "${hardware_accelerator}" "hardware accelerator")
-    endforeach()
-
-    foreach(hardware_filter IN ITEMS hwupload hwdownload scale_d3d11)
-        reject_runtime_component("${tool_path}" "-filters" "${hardware_filter}" "filter")
+    if(SDK_PLATFORM STREQUAL "macos")
+        validate_runtime_component("${tool_path}" "-encoders" "h264_videotoolbox" "encoder")
+    else()
+        validate_runtime_component("${tool_path}" "-encoders" "h264_mf" "encoder")
+        validate_runtime_component("${tool_path}" "-filters" "scale_d3d11" "filter")
+    endif()
+    foreach(hardware_filter IN ITEMS hwupload hwdownload)
+        validate_runtime_component("${tool_path}" "-filters" "${hardware_filter}" "filter")
     endforeach()
 endfunction()
 
@@ -353,32 +347,31 @@ elseif(SDK_PLATFORM STREQUAL "windows")
     validate_windows_runtime()
 
     cmake_host_system_information(RESULT runtime_host_arch QUERY OS_PLATFORM)
-    if(NOT SDK_ARCH STREQUAL "arm64" OR runtime_host_arch MATCHES "^(ARM64|arm64|aarch64)$")
-        validate_runtime_tool("${SDK_ROOT}/bin/ffmpeg.exe" "ffmpeg.exe")
-        validate_runtime_tool("${SDK_ROOT}/bin/ffprobe.exe" "ffprobe.exe")
-        validate_runtime_component("${SDK_ROOT}/bin/ffmpeg.exe" "-decoders" "prores" "decoder")
-        validate_runtime_component("${SDK_ROOT}/bin/ffmpeg.exe" "-decoders" "adpcm_ima_wav" "decoder")
-        validate_runtime_muxer("${SDK_ROOT}/bin/ffmpeg.exe" "f32le")
-        validate_webm_output_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
-        validate_raw_pcm_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
-        validate_video_to_mp3_output_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
-        validate_stem_export_filters("${SDK_ROOT}/bin/ffmpeg.exe")
-        validate_software_runtime_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
-        validate_raw_pcm_transcodes(
-            "${SDK_ROOT}/bin/ffmpeg.exe"
-            "${SDK_ROOT}/bin/ffprobe.exe"
-            "${SDK_PLATFORM}-${SDK_ARCH}")
-        validate_rawvideo_transcode(
-            "${SDK_ROOT}/bin/ffmpeg.exe"
-            "${SDK_ROOT}/bin/ffprobe.exe"
-            "${SDK_PLATFORM}-${SDK_ARCH}")
-        validate_ai_stem_export(
-            "${SDK_ROOT}/bin/ffmpeg.exe"
-            "${SDK_ROOT}/bin/ffprobe.exe"
-            "${SDK_PLATFORM}-${SDK_ARCH}")
-    else()
-        message(STATUS "Windows ARM64 runtime checks require a native ARM64 validation host")
+    if(SDK_ARCH STREQUAL "arm64" AND NOT runtime_host_arch MATCHES "^(ARM64|arm64|aarch64)$")
+        message(FATAL_ERROR "Windows ARM64 runtime validation requires a native ARM64 host")
     endif()
+    validate_runtime_tool("${SDK_ROOT}/bin/ffmpeg.exe" "ffmpeg.exe")
+    validate_runtime_tool("${SDK_ROOT}/bin/ffprobe.exe" "ffprobe.exe")
+    validate_runtime_component("${SDK_ROOT}/bin/ffmpeg.exe" "-decoders" "prores" "decoder")
+    validate_runtime_component("${SDK_ROOT}/bin/ffmpeg.exe" "-decoders" "adpcm_ima_wav" "decoder")
+    validate_runtime_muxer("${SDK_ROOT}/bin/ffmpeg.exe" "f32le")
+    validate_webm_output_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
+    validate_raw_pcm_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
+    validate_video_to_mp3_output_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
+    validate_stem_export_filters("${SDK_ROOT}/bin/ffmpeg.exe")
+    validate_software_runtime_capabilities("${SDK_ROOT}/bin/ffmpeg.exe")
+    validate_raw_pcm_transcodes(
+        "${SDK_ROOT}/bin/ffmpeg.exe"
+        "${SDK_ROOT}/bin/ffprobe.exe"
+        "${SDK_PLATFORM}-${SDK_ARCH}")
+    validate_rawvideo_transcode(
+        "${SDK_ROOT}/bin/ffmpeg.exe"
+        "${SDK_ROOT}/bin/ffprobe.exe"
+        "${SDK_PLATFORM}-${SDK_ARCH}")
+    validate_ai_stem_export(
+        "${SDK_ROOT}/bin/ffmpeg.exe"
+        "${SDK_ROOT}/bin/ffprobe.exe"
+        "${SDK_PLATFORM}-${SDK_ARCH}")
 else()
     message(FATAL_ERROR "Unsupported SDK_PLATFORM: ${SDK_PLATFORM}")
 endif()
@@ -415,14 +408,15 @@ foreach(required_json_key IN ITEMS
         ffmpegVersion
         platform
         arch
-        profile
         minimumSystemVersion
         compiler
         vcpkgBaseline
         vcpkgTriplet
         ffmpegSourceUrl
         ffmpegSourceSha256
-        features
+        featureProfile
+        externalDependencies
+        componentsFile
         licenseMode
         buildId
         createdAt)
@@ -433,24 +427,23 @@ string(JSON expected_sdk_version GET "${sdk_version_json}" sdkVersion)
 string(JSON expected_ffmpeg_version GET "${sdk_version_json}" ffmpegVersion)
 string(JSON expected_vcpkg_baseline GET "${sdk_version_json}" vcpkgBaseline)
 string(JSON expected_license_mode GET "${sdk_version_json}" licenseMode)
+string(JSON expected_feature_profile GET "${sdk_version_json}" featureProfile)
 string(JSON expected_source_url GET "${source_lock_json}" url)
 string(JSON expected_source_sha256 GET "${source_lock_json}" sha256)
 set(expected_platform_key "${SDK_PLATFORM}-${SDK_ARCH}")
 string(JSON platform_count LENGTH "${platform_matrix_json}" platforms)
-set(expected_artifact_profile "")
 set(expected_minimum_system_version "")
 if(platform_count GREATER 0)
     math(EXPR last_platform_index "${platform_count} - 1")
     foreach(platform_index RANGE 0 ${last_platform_index})
         string(JSON platform_key GET "${platform_matrix_json}" platforms ${platform_index} key)
         if(platform_key STREQUAL expected_platform_key)
-            string(JSON expected_artifact_profile GET "${platform_matrix_json}" platforms ${platform_index} profile)
             string(JSON expected_minimum_system_version GET "${platform_matrix_json}" platforms ${platform_index} minimumSystemVersion)
             break()
         endif()
     endforeach()
 endif()
-if(expected_artifact_profile STREQUAL "" OR expected_minimum_system_version STREQUAL "")
+if(expected_minimum_system_version STREQUAL "")
     message(FATAL_ERROR "Platform matrix is missing metadata for ${expected_platform_key}")
 endif()
 
@@ -459,10 +452,19 @@ require_manifest_equals("sdkVersion" "${expected_sdk_version}")
 require_manifest_equals("ffmpegVersion" "${expected_ffmpeg_version}")
 require_manifest_equals("platform" "${SDK_PLATFORM}")
 require_manifest_equals("arch" "${SDK_ARCH}")
-require_manifest_equals("profile" "${expected_artifact_profile}")
 require_manifest_equals("minimumSystemVersion" "${expected_minimum_system_version}")
 require_manifest_equals("vcpkgBaseline" "${expected_vcpkg_baseline}")
 require_manifest_equals("vcpkgTriplet" "${VCPKG_TRIPLET}")
 require_manifest_equals("ffmpegSourceUrl" "${expected_source_url}")
 require_manifest_equals("ffmpegSourceSha256" "${expected_source_sha256}")
 require_manifest_equals("licenseMode" "${expected_license_mode}")
+require_manifest_equals("featureProfile" "${expected_feature_profile}")
+require_manifest_equals("componentsFile" "components.json")
+require_path("${SDK_ROOT}/components.json" "SDK components inventory")
+file(READ "${SDK_ROOT}/components.json" components_json)
+string(JSON components_profile GET "${components_json}" featureProfile)
+string(JSON components_platform GET "${components_json}" platform)
+if(NOT components_profile STREQUAL expected_feature_profile OR
+   NOT components_platform STREQUAL expected_platform_key)
+    message(FATAL_ERROR "components.json profile or platform does not match SDK manifest")
+endif()

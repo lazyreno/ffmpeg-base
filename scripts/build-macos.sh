@@ -34,12 +34,11 @@ with open("config/platform-matrix.json", "r", encoding="utf-8") as handle:
     matrix = json.load(handle)
 for platform in matrix["platforms"]:
     if platform["key"] == platform_key:
-        for field in ("triplet", "profile", "minimumSystemVersion"):
+        for field in ("triplet", "minimumSystemVersion"):
             if not isinstance(platform.get(field), str) or not platform[field]:
                 raise SystemExit(f"{platform_key} must declare a non-empty {field}")
         print("\t".join((
             platform["triplet"],
-            platform["profile"],
             platform["minimumSystemVersion"],
         )))
         break
@@ -47,20 +46,19 @@ else:
     raise SystemExit(f"Missing platform matrix entry for {platform_key}")
 PY
 )"
-IFS=$'\t' read -r VCPKG_TRIPLET ARTIFACT_PROFILE MINIMUM_SYSTEM_VERSION <<< "${PLATFORM_METADATA}"
+IFS=$'\t' read -r VCPKG_TRIPLET MINIMUM_SYSTEM_VERSION <<< "${PLATFORM_METADATA}"
 BUILD_ROOT="${BUILD_ROOT:-${ROOT_DIR}/build/${PLATFORM_KEY}}"
-DIST_DIR="${DIST_DIR:-${ROOT_DIR}/dist}"
 SDK_VERSION="$(python3 -c 'import json; print(json.load(open("config/sdk-version.json"))["sdkVersion"])' < /dev/null)"
 FFMPEG_VERSION="$(python3 -c 'import json; print(json.load(open("config/sdk-version.json"))["ffmpegVersion"])' < /dev/null)"
 LICENSE_MODE="$(python3 -c 'import json; print(json.load(open("config/sdk-version.json"))["licenseMode"])' < /dev/null)"
 FEATURE_PROFILE="$(python3 -c 'import json; print(json.load(open("config/sdk-version.json"))["featureProfile"])' < /dev/null)"
 VCPKG_BASELINE="$(python3 -c 'import json; print(json.load(open("config/sdk-version.json"))["vcpkgBaseline"])' < /dev/null)"
-FEATURES_JSON="$(python3 -c 'import json; profile=json.load(open("config/ffmpeg-profile.json")); features=profile["features"]["common"] + profile["features"].get("macos", []); print(json.dumps(features, separators=(",", ":")))' < /dev/null)"
 SOURCE_LOCK_TAG="$(python3 -c 'import json; print(json.load(open("config/source-lock.json"))["tag"])' < /dev/null)"
 SOURCE_LOCK_URL="$(python3 -c 'import json; print(json.load(open("config/source-lock.json"))["url"])' < /dev/null)"
 SOURCE_LOCK_SHA256="$(python3 -c 'import json; print(json.load(open("config/source-lock.json"))["sha256"])' < /dev/null)"
 PROFILE_NAME="$(python3 -c 'import json; print(json.load(open("config/ffmpeg-profile.json"))["profile"])' < /dev/null)"
 PROFILE_LICENSE_MODE="$(python3 -c 'import json; print(json.load(open("config/ffmpeg-profile.json"))["licenseMode"])' < /dev/null)"
+EXTERNAL_DEPENDENCIES_JSON="$(python3 -c 'import json; print(json.dumps(json.load(open("config/ffmpeg-profile.json"))["externalDependencies"], separators=(",", ":")))' < /dev/null)"
 PROFILE_CONFIGURE_FLAGS=()
 while IFS= read -r profile_configure_flag; do
   if [[ -n "${profile_configure_flag}" ]]; then
@@ -88,7 +86,6 @@ INSTALL_PREFIX="${BUILD_ROOT}/install"
 SDK_PARENT_DIR="${BUILD_ROOT}/sdk"
 SDK_DIR_NAME="ffmpeg-sdk-${FFMPEG_VERSION}-v${SDK_VERSION}-${PLATFORM_KEY}"
 SDK_ROOT="${SDK_PARENT_DIR}/${SDK_DIR_NAME}"
-ARCHIVE_PATH="${DIST_DIR}/${SDK_DIR_NAME}.zip"
 MACOS_MIN_VERSION="${MACOS_MIN_VERSION:-${MINIMUM_SYSTEM_VERSION}}"
 if [[ "${MACOS_MIN_VERSION}" != "${MINIMUM_SYSTEM_VERSION}" ]]; then
   echo "MACOS_MIN_VERSION must match ${PLATFORM_KEY} minimumSystemVersion ${MINIMUM_SYSTEM_VERSION}." >&2
@@ -116,7 +113,7 @@ dependency_prefix() {
     value="${VCPKG_DEPENDENCY_ROOT}"
   fi
   if [[ -z "${value}" || ! -f "${value}/${header}" || ! -d "${value}/lib" ]]; then
-    echo "${package_name} headers and libraries are required for the desktop GPL software SDK profile." >&2
+    echo "${package_name} headers and libraries are required for the v2 SDK profile." >&2
     echo "Run vcpkg install --triplet ${VCPKG_TRIPLET}, or set ${env_name} to a prefix containing ${header} and lib/." >&2
     exit 1
   fi
@@ -129,6 +126,11 @@ LIBAOM_PREFIX="$(dependency_prefix LIBAOM_PREFIX aom include/aom/aom_encoder.h)"
 OPUS_PREFIX="$(dependency_prefix OPUS_PREFIX opus include/opus/opus.h)"
 LIBVORBIS_PREFIX="$(dependency_prefix LIBVORBIS_PREFIX libvorbis include/vorbis/codec.h)"
 OPENCORE_AMR_PREFIX="$(dependency_prefix OPENCORE_AMR_PREFIX opencore-amr include/opencore-amrnb/interf_enc.h)"
+if [[ ! -f "${OPENCORE_AMR_PREFIX}/include/opencore-amrwb/dec_if.h" ]] ||
+   ! find "${OPENCORE_AMR_PREFIX}/lib" -maxdepth 1 -iname '*opencore-amrwb*' -print -quit | grep -q .; then
+  echo "opencore-amrwb headers and library are required for --enable-libopencore-amrwb." >&2
+  exit 1
+fi
 X264_PREFIX="$(dependency_prefix X264_PREFIX x264 include/x264.h)"
 X265_PREFIX="$(dependency_prefix X265_PREFIX x265 include/x265.h)"
 
@@ -151,10 +153,11 @@ for dependency_prefix_path in "${EXTERNAL_PREFIXES[@]}"; do
   EXTERNAL_PKG_CONFIG_PATHS+=("${dependency_prefix_path}/lib/pkgconfig")
   EXTERNAL_PKG_CONFIG_PATHS+=("${dependency_prefix_path}/share/pkgconfig")
 done
-export PKG_CONFIG_PATH="$(IFS=:; echo "${EXTERNAL_PKG_CONFIG_PATHS[*]}")${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
+export PKG_CONFIG_LIBDIR="$(IFS=:; echo "${EXTERNAL_PKG_CONFIG_PATHS[*]}")"
+export PKG_CONFIG_PATH=""
 
-mkdir -p "${BUILD_ROOT}/downloads" "${BUILD_ROOT}/src" "${DIST_DIR}"
-rm -rf "${INSTALL_PREFIX}" "${SDK_ROOT}" "${ARCHIVE_PATH}" "${ARCHIVE_PATH}.sha256"
+mkdir -p "${BUILD_ROOT}/downloads" "${BUILD_ROOT}/src"
+rm -rf "${INSTALL_PREFIX}" "${SDK_ROOT}"
 
 if [[ ! -f "${SOURCE_ARCHIVE}" ]]; then
   curl --fail --show-error --location --retry 3 --retry-delay 5 \
@@ -194,15 +197,17 @@ pushd "${SOURCE_DIR}" >/dev/null
 
 cmake \
   -D SOURCE_DIR="${SOURCE_DIR}" \
+  -D SDK_PLATFORM=macos \
+  -D SDK_ARCH="${SDK_ARCH}" \
   -P "${ROOT_DIR}/scripts/validate-ffmpeg-components.cmake"
+
+if [[ "${SDK_CONFIGURE_ONLY:-0}" == "1" ]]; then
+  echo "Configure-only preflight passed for ${PLATFORM_KEY}."
+  exit 0
+fi
 
 make -j"$(sysctl -n hw.ncpu)"
 make install
-mkdir -p "${INSTALL_PREFIX}/licenses/opencore-amr"
-if [[ -f "${VCPKG_DEPENDENCY_ROOT}/share/opencore-amr/copyright" ]]; then
-  cp -p "${VCPKG_DEPENDENCY_ROOT}/share/opencore-amr/copyright" \
-    "${INSTALL_PREFIX}/licenses/opencore-amr/LICENSE"
-fi
 popd >/dev/null
 
 "${ROOT_DIR}/scripts/stage-sdk.sh" \
@@ -210,7 +215,22 @@ popd >/dev/null
   --prefix "${INSTALL_PREFIX}" \
   --output "${SDK_ROOT}" \
   --platform macos \
-  --arch "${SDK_ARCH}"
+  --arch "${SDK_ARCH}" \
+  --vcpkg-root "${VCPKG_DEPENDENCY_ROOT}"
+
+python3 "${ROOT_DIR}/scripts/validate-sdk-dependencies.py" \
+  --sdk-root "${SDK_ROOT}" \
+  --platform macos \
+  --vcpkg-root "${VCPKG_INSTALLED_DIR:-${VCPKG_ROOT}/installed}" \
+  --triplet "${VCPKG_TRIPLET}"
+
+python3 "${ROOT_DIR}/scripts/generate-components.py" \
+  --ffmpeg "${SDK_ROOT}/bin/ffmpeg" \
+  --parser-registry "${SOURCE_DIR}/libavcodec/parser_list.c" \
+  --output "${SDK_ROOT}/components.json" \
+  --platform-key "${PLATFORM_KEY}" \
+  --feature-profile "${FEATURE_PROFILE}" \
+  --ffmpeg-version "${FFMPEG_VERSION}"
 
 FILE_TOOL="$(command -v file)"
 VTOOL_EXECUTABLE="$(command -v vtool)"
@@ -231,14 +251,14 @@ cmake \
   -D FFMPEG_VERSION="${FFMPEG_VERSION}" \
   -D SDK_PLATFORM="macos" \
   -D SDK_ARCH="${SDK_ARCH}" \
-  -D ARTIFACT_PROFILE="${ARTIFACT_PROFILE}" \
   -D MINIMUM_SYSTEM_VERSION="${MINIMUM_SYSTEM_VERSION}" \
   -D SDK_COMPILER="$(clang --version | head -n 1)" \
   -D VCPKG_BASELINE="${VCPKG_BASELINE}" \
   -D VCPKG_TRIPLET="${VCPKG_TRIPLET}" \
   -D FFMPEG_SOURCE_URL="${SOURCE_LOCK_URL}" \
   -D FFMPEG_SOURCE_SHA256="${SOURCE_LOCK_SHA256}" \
-  -D SDK_FEATURES_JSON="${FEATURES_JSON}" \
+  -D FEATURE_PROFILE="${FEATURE_PROFILE}" \
+  -D SDK_EXTERNAL_DEPENDENCIES_JSON="${EXTERNAL_DEPENDENCIES_JSON}" \
   -D LICENSE_MODE="${LICENSE_MODE}" \
   -D BUILD_ID="${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}" \
   -D CREATED_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
@@ -248,7 +268,13 @@ python3 "${ROOT_DIR}/scripts/validate-ffmpeg-runtime-capabilities.py" \
   --ffmpeg "${SDK_ROOT}/bin/ffmpeg" \
   --require-bsf h264_metadata \
   --require-bsf hevc_metadata \
-  --manifest "${SDK_ROOT}/manifest.json"
+  --components "${SDK_ROOT}/components.json"
+
+python3 "${ROOT_DIR}/scripts/validate-media-coverage.py" \
+  --ffmpeg "${SDK_ROOT}/bin/ffmpeg" \
+  --ffprobe "${SDK_ROOT}/bin/ffprobe"
+python3 "${ROOT_DIR}/scripts/validate-https-input.py" \
+  --ffmpeg "${SDK_ROOT}/bin/ffmpeg"
 
 cmake \
   -D SDK_ROOT="${SDK_ROOT}" \
@@ -257,11 +283,4 @@ cmake \
   -D VCPKG_TRIPLET="${VCPKG_TRIPLET}" \
   -P "${ROOT_DIR}/scripts/validate-sdk-layout.cmake"
 
-pushd "${SDK_PARENT_DIR}" >/dev/null
-zip -qry "${ARCHIVE_PATH}" "${SDK_DIR_NAME}"
-popd >/dev/null
-
-shasum -a 256 "${ARCHIVE_PATH}" | awk '{print $1}' > "${ARCHIVE_PATH}.sha256"
-
-echo "SDK archive: ${ARCHIVE_PATH}"
-echo "SHA256     : $(cat "${ARCHIVE_PATH}.sha256")"
+echo "SDK directory: ${SDK_ROOT}"

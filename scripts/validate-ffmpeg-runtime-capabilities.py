@@ -44,45 +44,34 @@ def validate_bsf_requirements(bsf_output: str, required_bsfs: list[str]) -> list
             if bsf not in available_bsfs]
 
 
-def manifest_feature_name(encoder: str) -> str:
-    return f"encoder-{encoder.replace('-', '_')}"
-
-
-def validate_manifest_requirements(
-    manifest: dict, available_encoders: set[str], required_encoders: list[str]
+def validate_components_requirements(
+    document: dict, required_encoders: list[str], required_bsfs: list[str]
 ) -> list[str]:
-    features = manifest.get("features")
-    if not isinstance(features, list) or not all(isinstance(feature, str) for feature in features):
-        return ["manifest features must be an array of strings"]
-
-    diagnostics: list[str] = []
-    for encoder in required_encoders:
-        feature = manifest_feature_name(encoder)
-        if feature not in features:
-            diagnostics.append(f"manifest is missing required feature: {feature}")
-        if feature in features and encoder not in available_encoders:
-            diagnostics.append(
-                f"manifest claims {feature} but runtime encoder is missing: {encoder}"
-            )
-    return diagnostics
-
-
-def validate_manifest_bsf_requirements(
-    manifest: dict, available_bsfs: set[str], required_bsfs: list[str]
-) -> list[str]:
-    features = manifest.get("features")
-    if not isinstance(features, list) or not all(isinstance(feature, str) for feature in features):
-        return ["manifest features must be an array of strings"]
-
-    diagnostics: list[str] = []
-    for bsf in required_bsfs:
-        feature = f"bsf-{bsf}"
-        if feature not in features:
-            diagnostics.append(f"manifest is missing required feature: {feature}")
-        if feature in features and bsf not in available_bsfs:
-            diagnostics.append(
-                f"manifest claims {feature} but runtime bitstream filter is missing: {bsf}"
-            )
+    components = document.get("components", {})
+    diagnostics = []
+    for decoder in ("prores", "rawvideo", "adpcm_ima_wav"):
+        if decoder not in components.get("decoders", []):
+            diagnostics.append(f"components.json is missing decoder: {decoder}")
+    for kind, requested in (("encoders", required_encoders), ("bsfs", required_bsfs)):
+        for name in requested:
+            if name not in components.get(kind, []):
+                diagnostics.append(f"components.json is missing {kind}: {name}")
+    for kind in ("decoders", "encoders", "demuxers", "muxers", "parsers", "bsfs", "filters", "hwaccels"):
+        values = components.get(kind)
+        if not isinstance(values, list) or not values:
+            diagnostics.append(f"components.json has no {kind}")
+        elif document.get("counts", {}).get(kind) != len(values):
+            diagnostics.append(f"components.json {kind} count mismatch")
+    for kind in ("protocols", "devices"):
+        values = components.get(kind, {})
+        for direction in ("input", "output"):
+            entries = values.get(direction) if isinstance(values, dict) else None
+            if not isinstance(entries, list) or (kind == "protocols" and not entries) or (kind == "devices" and direction == "input" and not entries):
+                diagnostics.append(f"components.json has no {kind}.{direction}")
+            elif document.get("counts", {}).get(kind, {}).get(direction) != len(entries):
+                diagnostics.append(f"components.json {kind}.{direction} count mismatch")
+    if "lavfi" not in components.get("devices", {}).get("input", []):
+        diagnostics.append("components.json is missing input device: lavfi")
     return diagnostics
 
 
@@ -121,7 +110,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--ffmpeg", required=True, type=Path)
     parser.add_argument("--require-encoder", action="append", default=[], dest="required_encoders")
     parser.add_argument("--require-bsf", action="append", default=[], dest="required_bsfs")
-    parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--components", type=Path, required=True)
     return parser.parse_args()
 
 
@@ -149,26 +138,13 @@ def main() -> int:
         )
         return 1
     diagnostics.extend(validate_bsf_requirements(bsf_output, arguments.required_bsfs))
-    if arguments.manifest is not None:
-        try:
-            manifest = json.loads(arguments.manifest.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            print(f"failed to read manifest {arguments.manifest}: {error}", file=sys.stderr)
-            return 1
-        diagnostics.extend(
-            validate_manifest_requirements(
-                manifest,
-                parse_encoder_names(encoder_output),
-                arguments.required_encoders,
-            )
-        )
-        diagnostics.extend(
-            validate_manifest_bsf_requirements(
-                manifest,
-                parse_bsf_names(bsf_output),
-                arguments.required_bsfs,
-            )
-        )
+    try:
+        components = json.loads(arguments.components.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"failed to read components {arguments.components}: {error}", file=sys.stderr)
+        return 1
+    diagnostics.extend(validate_components_requirements(
+        components, arguments.required_encoders, arguments.required_bsfs))
 
     if diagnostics:
         print("\n".join(diagnostics), file=sys.stderr)

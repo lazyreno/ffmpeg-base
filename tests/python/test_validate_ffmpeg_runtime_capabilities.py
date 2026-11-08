@@ -49,20 +49,11 @@ class RuntimeCapabilityValidatorTest(unittest.TestCase):
 
         self.assertEqual(["missing runtime encoder: libvpx-vp9"], diagnostics)
 
-    def test_rejects_manifest_vp9_claim_when_runtime_lacks_encoder(self):
+    def test_components_require_all_historical_decoder_gaps(self):
         validator = load_validator()
-        manifest = json.loads('{"features": ["encoder-libvpx_vp9"]}')
-
-        diagnostics = validator.validate_manifest_requirements(
-            manifest,
-            {"libaom-av1"},
-            ["libvpx-vp9"],
-        )
-
-        self.assertEqual(
-            ["manifest claims encoder-libvpx_vp9 but runtime encoder is missing: libvpx-vp9"],
-            diagnostics,
-        )
+        components = {"components": {"decoders": ["prores", "rawvideo"], "encoders": [], "bsfs": []}}
+        diagnostics = validator.validate_components_requirements(components, [], [])
+        self.assertTrue(any("adpcm_ima_wav" in item for item in diagnostics))
 
     def test_extracts_and_requires_exact_bitstream_filter_names(self):
         validator = load_validator()
@@ -78,18 +69,11 @@ class RuntimeCapabilityValidatorTest(unittest.TestCase):
             ),
         )
 
-    def test_rejects_manifest_bitstream_filter_claim_when_runtime_lacks_it(self):
+    def test_components_require_exact_requested_bsf(self):
         validator = load_validator()
-        manifest = {"features": ["bsf-h264_metadata", "bsf-hevc_metadata"]}
-
-        diagnostics = validator.validate_manifest_bsf_requirements(
-            manifest, {"h264_metadata"}, ["h264_metadata", "hevc_metadata"]
-        )
-
-        self.assertEqual(
-            ["manifest claims bsf-hevc_metadata but runtime bitstream filter is missing: hevc_metadata"],
-            diagnostics,
-        )
+        components = {"components": {"decoders": ["prores", "rawvideo", "adpcm_ima_wav"], "encoders": [], "bsfs": ["h264_metadata"]}}
+        diagnostics = validator.validate_components_requirements(components, [], ["hevc_metadata"])
+        self.assertTrue(any("hevc_metadata" in item for item in diagnostics))
 
 
 if __name__ == "__main__":

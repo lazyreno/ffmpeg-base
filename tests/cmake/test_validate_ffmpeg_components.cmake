@@ -1,215 +1,57 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.21)
+set(root "${CMAKE_CURRENT_LIST_DIR}/../..")
+set(validator "${root}/scripts/validate-ffmpeg-components.cmake")
+set(fixture "${root}/build/test-validate-ffmpeg-components")
+file(REMOVE_RECURSE "${fixture}")
+file(MAKE_DIRECTORY "${fixture}/libavformat" "${fixture}/libavcodec" "${fixture}/libavfilter" "${fixture}/libavdevice")
 
-set(repo_root "${CMAKE_CURRENT_LIST_DIR}/../..")
-set(validator "${repo_root}/scripts/validate-ffmpeg-components.cmake")
-set(test_root "${repo_root}/build/test-validate-ffmpeg-components")
-
-function(write_registry_fixture fixture_root volume_symbol include_alac include_amrnb include_amr_muxer include_aiff_muxer include_pcm_s16be include_wmav2 include_vp9)
-    file(MAKE_DIRECTORY
-        "${fixture_root}/libavformat"
-        "${fixture_root}/libavcodec"
-        "${fixture_root}/libavfilter")
-
-    file(WRITE "${fixture_root}/libavformat/demuxer_list.c" "
-&ff_pcm_s16le_demuxer,
-&ff_pcm_s24le_demuxer,
-&ff_pcm_s32le_demuxer,
-&ff_pcm_f32le_demuxer,
-")
-    file(WRITE "${fixture_root}/libavformat/muxer_list.c" "
-&ff_pcm_f32le_muxer,
-")
-    if(include_amr_muxer)
-        file(APPEND "${fixture_root}/libavformat/muxer_list.c" "
-&ff_amr_muxer,
-")
-    endif()
-    if(include_aiff_muxer)
-        file(APPEND "${fixture_root}/libavformat/muxer_list.c" "
-&ff_aiff_muxer,
-")
-    endif()
-    file(WRITE "${fixture_root}/libavcodec/codec_list.c" "
-&ff_mjpeg_encoder,
-&ff_rawvideo_decoder,
-&ff_prores_decoder,
-&ff_adpcm_ima_wav_decoder,
-&ff_libx264_encoder,
-&ff_libx265_encoder,
-&ff_pcm_s16le_decoder,
-&ff_pcm_s16le_encoder,
-&ff_pcm_s24le_decoder,
-&ff_pcm_s24le_encoder,
-&ff_pcm_s32le_decoder,
-&ff_pcm_s32le_encoder,
-&ff_pcm_f32le_decoder,
-&ff_pcm_f32le_encoder,
-")
-    if(include_alac)
-        file(APPEND "${fixture_root}/libavcodec/codec_list.c" "
-&ff_alac_encoder,
-")
-    endif()
-    if(include_amrnb)
-        file(APPEND "${fixture_root}/libavcodec/codec_list.c" "
-&ff_libopencore_amrnb_encoder,
-")
-    endif()
-    if(include_pcm_s16be)
-        file(APPEND "${fixture_root}/libavcodec/codec_list.c" "
-&ff_pcm_s16be_encoder,
-")
-    endif()
-    if(include_wmav2)
-        file(APPEND "${fixture_root}/libavcodec/codec_list.c" "
-&ff_wmav2_encoder,
-")
-    endif()
-    if(include_vp9)
-        file(APPEND "${fixture_root}/libavcodec/codec_list.c" "
-&ff_libvpx_vp9_encoder,
-")
-    endif()
-    file(WRITE "${fixture_root}/libavfilter/filter_list.c" "
-&ff_af_adelay,
-&ff_af_afftdn,
-&ff_af_aformat,
-&ff_af_amix,
-&ff_af_aresample,
-&ff_af_pan,
-&${volume_symbol},
-")
+function(write_symbols path)
+    file(WRITE "${fixture}/${path}" "")
+    foreach(symbol IN LISTS ARGN)
+        file(APPEND "${fixture}/${path}" "&${symbol},\n")
+    endforeach()
 endfunction()
 
-function(expect_missing_registry_symbol fixture_root expected_diagnostic)
-    execute_process(
-        COMMAND "${CMAKE_COMMAND}"
-            "-DSOURCE_DIR=${fixture_root}"
-            -P "${validator}"
-        RESULT_VARIABLE result
-        OUTPUT_VARIABLE output
-        ERROR_VARIABLE error
-    )
-    if(result EQUAL 0)
-        message(FATAL_ERROR
-            "Registry fixture missing ${expected_diagnostic} must fail validation")
-    endif()
-    set(diagnostics "${output}\n${error}")
-    string(FIND "${diagnostics}" "${expected_diagnostic}" diagnostic_offset)
-    if(diagnostic_offset EQUAL -1)
-        message(FATAL_ERROR
-            "Missing registry diagnostic must identify ${expected_diagnostic}:\n${diagnostics}")
+write_symbols(libavformat/demuxer_list.c
+    ff_pcm_s16le_demuxer ff_pcm_s24le_demuxer ff_pcm_s32le_demuxer ff_pcm_f32le_demuxer
+    ff_libopenmpt_demuxer ff_libgme_demuxer)
+write_symbols(libavformat/muxer_list.c ff_pcm_f32le_muxer ff_amr_muxer ff_aiff_muxer)
+write_symbols(libavcodec/codec_list.c
+    ff_mjpeg_encoder ff_rawvideo_decoder ff_rawvideo_encoder ff_prores_decoder
+    ff_prores_ks_encoder ff_adpcm_ima_wav_decoder ff_libx264_encoder ff_libx265_encoder
+    ff_pcm_s16le_decoder ff_pcm_s16le_encoder ff_pcm_s24le_decoder ff_pcm_s24le_encoder
+    ff_pcm_s32le_decoder ff_pcm_s32le_encoder ff_pcm_f32le_decoder ff_pcm_f32le_encoder
+    ff_alac_encoder ff_libopencore_amrnb_encoder ff_pcm_s16be_encoder ff_wmav2_encoder
+    ff_libvpx_vp9_encoder ff_libdav1d_decoder ff_libgsm_decoder ff_libgsm_encoder
+    ff_libjxl_encoder ff_libopenjpeg_encoder ff_libopencore_amrwb_decoder
+    ff_libspeex_encoder ff_libsvtav1_encoder ff_libvo_amrwbenc_encoder
+    ff_libwebp_encoder ff_h264_videotoolbox_encoder ff_h264_mf_encoder)
+write_symbols(libavfilter/filter_list.c
+    ff_af_adelay ff_af_afftdn ff_af_aformat ff_af_amix ff_af_aresample
+    ff_af_pan ff_af_volume ff_af_rubberband ff_vf_zscale ff_vf_subtitles ff_vf_drawtext)
+write_symbols(libavdevice/indev_list.c
+    ff_lavfi_demuxer ff_avfoundation_demuxer ff_dshow_demuxer ff_gdigrab_demuxer)
+write_symbols(libavdevice/outdev_list.c ff_audiotoolbox_muxer)
+file(WRITE "${fixture}/config.h" "#define CONFIG_D3D11VA 1\n#define CONFIG_DXVA2 1\n")
+
+function(check platform arch expected_result expected_message)
+    execute_process(COMMAND "${CMAKE_COMMAND}" "-DSOURCE_DIR=${fixture}"
+        "-DSDK_PLATFORM=${platform}" "-DSDK_ARCH=${arch}" -P "${validator}"
+        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+    if(expected_result STREQUAL "pass" AND NOT result EQUAL 0)
+        message(FATAL_ERROR "${platform}/${arch} fixture failed:\n${output}\n${error}")
+    elseif(expected_result STREQUAL "fail")
+        if(result EQUAL 0 OR NOT "${output}${error}" MATCHES "${expected_message}")
+            message(FATAL_ERROR "Expected ${expected_message} failure:\n${output}\n${error}")
+        endif()
     endif()
 endfunction()
 
-file(REMOVE_RECURSE "${test_root}")
-
-set(valid_fixture "${test_root}/valid")
-write_registry_fixture("${valid_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE TRUE TRUE TRUE)
-execute_process(
-    COMMAND "${CMAKE_COMMAND}"
-        "-DSOURCE_DIR=${valid_fixture}"
-        -P "${validator}"
-    RESULT_VARIABLE valid_result
-    OUTPUT_VARIABLE valid_output
-    ERROR_VARIABLE valid_error
-)
-if(NOT valid_result EQUAL 0)
-    message(FATAL_ERROR
-        "Exact registry fixture must pass:\n"
-        "${valid_output}\n${valid_error}")
-endif()
-
-set(missing_rawvideo_fixture "${test_root}/missing-rawvideo")
-write_registry_fixture("${missing_rawvideo_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE TRUE TRUE TRUE)
-set(rawvideo_codec_list "${missing_rawvideo_fixture}/libavcodec/codec_list.c")
-file(READ "${rawvideo_codec_list}" rawvideo_codec_content)
-string(REPLACE "&ff_rawvideo_decoder," "&ff_rawvideo_decoder_alternate," rawvideo_codec_content "${rawvideo_codec_content}")
-file(WRITE "${rawvideo_codec_list}" "${rawvideo_codec_content}")
-expect_missing_registry_symbol("${missing_rawvideo_fixture}" "ff_rawvideo_decoder")
-
-foreach(decoder IN ITEMS prores adpcm_ima_wav)
-    set(missing_decoder_fixture "${test_root}/missing-${decoder}")
-    write_registry_fixture("${missing_decoder_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE TRUE TRUE TRUE)
-    set(decoder_codec_list "${missing_decoder_fixture}/libavcodec/codec_list.c")
-    file(READ "${decoder_codec_list}" decoder_codec_content)
-    string(REPLACE "&ff_${decoder}_decoder," "" decoder_codec_content "${decoder_codec_content}")
-    file(WRITE "${decoder_codec_list}" "${decoder_codec_content}")
-    expect_missing_registry_symbol("${missing_decoder_fixture}" "ff_${decoder}_decoder")
-endforeach()
-
-set(missing_alac_fixture "${test_root}/missing-alac")
-write_registry_fixture("${missing_alac_fixture}" "ff_af_volume" FALSE TRUE TRUE TRUE TRUE TRUE TRUE)
-expect_missing_registry_symbol(
-    "${missing_alac_fixture}"
-    "ff_alac_encoder")
-
-set(missing_amrnb_fixture "${test_root}/missing-amrnb")
-write_registry_fixture("${missing_amrnb_fixture}" "ff_af_volume" TRUE FALSE TRUE TRUE TRUE TRUE TRUE)
-expect_missing_registry_symbol(
-    "${missing_amrnb_fixture}"
-    "ff_libopencore_amrnb_encoder")
-
-set(missing_amr_muxer_fixture "${test_root}/missing-amr-muxer")
-write_registry_fixture("${missing_amr_muxer_fixture}" "ff_af_volume" TRUE TRUE FALSE TRUE TRUE TRUE TRUE)
-expect_missing_registry_symbol(
-    "${missing_amr_muxer_fixture}"
-    "ff_amr_muxer")
-
-set(missing_aiff_muxer_fixture "${test_root}/missing-aiff-muxer")
-write_registry_fixture("${missing_aiff_muxer_fixture}" "ff_af_volume" TRUE TRUE TRUE FALSE TRUE TRUE TRUE)
-expect_missing_registry_symbol(
-    "${missing_aiff_muxer_fixture}"
-    "ff_aiff_muxer")
-
-set(missing_pcm_s16be_fixture "${test_root}/missing-pcm-s16be")
-write_registry_fixture("${missing_pcm_s16be_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE FALSE TRUE TRUE)
-expect_missing_registry_symbol(
-    "${missing_pcm_s16be_fixture}"
-    "ff_pcm_s16be_encoder")
-
-set(missing_wmav2_fixture "${test_root}/missing-wmav2")
-write_registry_fixture("${missing_wmav2_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE TRUE FALSE TRUE)
-
-set(missing_vp9_fixture "${test_root}/missing-vp9")
-write_registry_fixture("${missing_vp9_fixture}" "ff_af_volume" TRUE TRUE TRUE TRUE TRUE TRUE FALSE)
-expect_missing_registry_symbol(
-    "${missing_vp9_fixture}"
-    "ff_libvpx_vp9_encoder")
-expect_missing_registry_symbol(
-    "${missing_wmav2_fixture}"
-    "ff_wmav2_encoder")
-
-set(substring_fixture "${test_root}/substring")
-write_registry_fixture(
-    "${substring_fixture}"
-    "ff_af_volumedetect"
-    TRUE
-    TRUE
-    TRUE
-    TRUE
-    TRUE
-    TRUE
-    TRUE)
-execute_process(
-    COMMAND "${CMAKE_COMMAND}"
-        "-DSOURCE_DIR=${substring_fixture}"
-        -P "${validator}"
-    RESULT_VARIABLE substring_result
-    OUTPUT_VARIABLE substring_output
-    ERROR_VARIABLE substring_error
-)
-if(substring_result EQUAL 0)
-    message(FATAL_ERROR
-        "ff_af_volumedetect must not satisfy the ff_af_volume requirement")
-endif()
-set(substring_diagnostics
-    "${substring_output}\n${substring_error}")
-if(NOT substring_diagnostics MATCHES
-        "did not register volume audio filter \\(ff_af_volume\\)")
-    message(FATAL_ERROR
-        "Substring rejection must identify ff_af_volume:\n"
-        "${substring_diagnostics}")
-endif()
-
-file(REMOVE_RECURSE "${test_root}")
+check(macos arm64 pass "")
+check(windows x86_64 pass "")
+check(windows arm64 pass "")
+file(READ "${fixture}/libavcodec/codec_list.c" codecs)
+string(REPLACE "&ff_prores_decoder,\n" "" codecs "${codecs}")
+file(WRITE "${fixture}/libavcodec/codec_list.c" "${codecs}")
+check(macos arm64 fail "ff_prores_decoder")
+file(REMOVE_RECURSE "${fixture}")

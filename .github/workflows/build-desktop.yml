@@ -2,6 +2,15 @@ name: Build Desktop FFmpeg SDK
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Preflight only or build an unpublished candidate SDK
+        required: true
+        type: choice
+        default: preflight
+        options:
+          - preflight
+          - candidate
   pull_request:
     branches:
       - main
@@ -19,8 +28,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
     paths:
       - ".github/workflows/build-desktop.yml"
       - "cmake-package/**"
@@ -47,12 +54,6 @@ jobs:
       vcpkg_commit: ${{ steps.matrix.outputs.vcpkg_commit }}
 
     steps:
-      - name: Reject non-main manual release builds
-        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
-        run: |
-          echo "Manual SDK release builds must target refs/heads/main, not ${GITHUB_REF}." >&2
-          exit 1
-
       - name: Checkout
         uses: actions/checkout@v5
 
@@ -65,25 +66,18 @@ jobs:
           python3 -m json.tool config/vcpkg-lock.json >/dev/null
           python3 -m json.tool vcpkg.json >/dev/null
           python3 -m json.tool vcpkg-configuration.json >/dev/null
-          python3 -m unittest tests/python/test_validate_ai_stem_export.py -v
-          python3 -m unittest tests/python/test_validate_raw_pcm_transcode.py -v
-          python3 -m unittest tests/python/test_validate_rawvideo_transcode.py -v
-          python3 -m unittest tests/python/test_validate_ffmpeg_runtime_capabilities.py -v
-          python3 -m unittest tests/python/test_validate_macos_sdk_minos.py -v
-          python3 -m unittest tests/python/test_validate_windows_sdk_subsystem.py -v
-          cmake -P tests/cmake/test_manifest_metadata.cmake
-          cmake -P tests/cmake/test_validate_ffmpeg_components.cmake
-          cmake -P tests/cmake/test_release_workflow.cmake
+          python3 -m unittest discover -s tests/python -v
+          for test_script in tests/cmake/*.cmake; do cmake -P "$test_script"; done
 
       - name: Generate build matrix
         id: matrix
         run: python3 scripts/generate-github-matrix.py --github-output "$GITHUB_OUTPUT"
 
-  build-sdk:
-    name: ${{ matrix.key }} SDK
+  preflight-sdk:
+    name: ${{ matrix.key }} preflight
     needs: prepare-matrix
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
@@ -107,6 +101,12 @@ jobs:
           clang --version
           cmake --version
           command -v vtool
+          echo "ImageOS=${ImageOS:-unknown} ImageVersion=${ImageVersion:-unknown}"
+          xcodebuild -version
+          xcrun --show-sdk-version
+          python3 --version
+          df -h .
+          git -C .vcpkg-root rev-parse HEAD
 
       - name: Setup MSYS2
         if: matrix.buildFamily == 'windows-msvc'
@@ -225,12 +225,37 @@ jobs:
           link 2>&1 | Select-Object -First 1
           cmake --version
           bash --version
+          python --version
+          nasm -v
+          Write-Host "ImageOS=$env:ImageOS ImageVersion=$env:ImageVersion"
+          Write-Host "VS=$env:VSINSTALLDIR MSVC=$env:VCToolsVersion WindowsSDK=$env:WindowsSDKVersion"
+          Get-PSDrive -Name C
+          git -C .vcpkg-root rev-parse HEAD
 
-      - name: Install macOS LGPL codec dependencies
+      - name: Resolve runner image for dependency cache
+        id: runner-image
+        shell: bash
+        run: echo "version=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore or save pinned vcpkg packages
+        id: vcpkg-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-binary-cache
+          key: vcpkg-${{ matrix.key }}-${{ steps.runner-image.outputs.version }}-${{ needs.prepare-matrix.outputs.vcpkg_commit }}-${{ hashFiles('vcpkg.json', 'ports/**') }}
+
+      - name: Install macOS v2 dependencies
         if: matrix.buildFamily == 'macos'
         env:
           MACOSX_DEPLOYMENT_TARGET: "11.0"
+          VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-binary-cache,readwrite
         run: |
+          "${{ github.workspace }}/.vcpkg-root/vcpkg" install \
+            --dry-run \
+            --vcpkg-root "${{ github.workspace }}/.vcpkg-root" \
+            --triplet "${{ matrix.triplet }}" \
+            --overlay-ports "${{ github.workspace }}/ports" \
+            --x-install-root "${{ github.workspace }}/.vcpkg-installed"
           "${{ github.workspace }}/.vcpkg-root/vcpkg" install \
             --vcpkg-root "${{ github.workspace }}/.vcpkg-root" \
             --triplet "${{ matrix.triplet }}" \
@@ -238,11 +263,262 @@ jobs:
             --x-install-root "${{ github.workspace }}/.vcpkg-installed" \
             --clean-after-build
 
-      - name: Install Windows LGPL codec dependencies
+      - name: Install Windows v2 dependencies
+        if: matrix.buildFamily == 'windows-msvc'
+        shell: pwsh
+        env:
+          VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-binary-cache,readwrite
+        run: |
+          $vcpkgRoot = "${{ github.workspace }}\.vcpkg-root"
+          & "$vcpkgRoot\vcpkg.exe" install `
+            --dry-run `
+            --vcpkg-root "$vcpkgRoot" `
+            --triplet "${{ matrix.triplet }}" `
+            --overlay-ports "${{ github.workspace }}\ports" `
+            --x-install-root "${{ github.workspace }}/.vcpkg-installed"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$vcpkgRoot\vcpkg.exe" install `
+            --vcpkg-root "$vcpkgRoot" `
+            --triplet "${{ matrix.triplet }}" `
+            --overlay-ports "${{ github.workspace }}\ports" `
+            --x-install-root "${{ github.workspace }}/.vcpkg-installed" `
+            --clean-after-build
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Configure macOS SDK
+        if: matrix.buildFamily == 'macos'
+        env:
+          SDK_ARCH: ${{ matrix.arch }}
+          SDK_CONFIGURE_ONLY: "1"
+          VCPKG_ROOT: ${{ github.workspace }}/.vcpkg-root
+          VCPKG_INSTALLED_DIR: ${{ github.workspace }}/.vcpkg-installed
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+        run: scripts/build-macos.sh
+
+      - name: Configure Windows SDK
+        if: matrix.buildFamily == 'windows-msvc'
+        shell: pwsh
+        env:
+          SDK_ARCH: ${{ matrix.arch }}
+          SDK_CONFIGURE_ONLY: "1"
+          VCPKG_ROOT: ${{ github.workspace }}\.vcpkg-root
+          VCPKG_INSTALLED_DIR: ${{ github.workspace }}/.vcpkg-installed
+        run: scripts/build-windows-msvc.ps1
+
+  build-sdk:
+    name: ${{ matrix.key }} SDK
+    needs: [prepare-matrix, preflight-sdk]
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'candidate'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Checkout pinned vcpkg
+        uses: actions/checkout@v5
+        with:
+          repository: microsoft/vcpkg
+          ref: ${{ needs.prepare-matrix.outputs.vcpkg_commit }}
+          path: .vcpkg-root
+
+      - name: Show macOS runner
+        if: matrix.buildFamily == 'macos'
+        run: |
+          sw_vers
+          uname -a
+          clang --version
+          cmake --version
+          command -v vtool
+          echo "ImageOS=${ImageOS:-unknown} ImageVersion=${ImageVersion:-unknown}"
+          xcodebuild -version
+          xcrun --show-sdk-version
+          python3 --version
+          df -h .
+          git -C .vcpkg-root rev-parse HEAD
+
+      - name: Setup MSYS2
+        if: matrix.buildFamily == 'windows-msvc'
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          path-type: inherit
+          update: true
+          cache: false
+          install: >-
+            base-devel
+            diffutils
+            make
+            nasm
+
+      - name: Setup MSVC
         if: matrix.buildFamily == 'windows-msvc'
         shell: pwsh
         run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $requiredComponent = if ("${{ matrix.arch }}" -eq "arm64") {
+            "Microsoft.VisualStudio.Component.VC.Tools.ARM64"
+          } else {
+            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+          }
+          $vsInstall = & $vswhere -latest -products * -requires $requiredComponent -property installationPath
+          if (-not $vsInstall) {
+            throw "Visual Studio with MSVC tools was not found."
+          }
+
+          $vcvars = Join-Path $vsInstall "VC\Auxiliary\Build\vcvarsall.bat"
+          if (!(Test-Path $vcvars)) {
+            throw "vcvarsall.bat was not found: $vcvars"
+          }
+
+          $arch = "${{ matrix.msvcArch }}"
+          $envLines = cmd /s /c "`"$vcvars`" $arch && set"
+          $exportNames = @(
+            "CommandPromptType",
+            "DevEnvDir",
+            "EXTERNAL_INCLUDE",
+            "FrameworkDir",
+            "FrameworkDir64",
+            "FrameworkVersion",
+            "FrameworkVersion64",
+            "INCLUDE",
+            "LIB",
+            "LIBPATH",
+            "NETFXSDKDir",
+            "Path",
+            "Platform",
+            "UCRTVersion",
+            "UniversalCRTSdkDir",
+            "VCIDEInstallDir",
+            "VCINSTALLDIR",
+            "VCToolsInstallDir",
+            "VCToolsRedistDir",
+            "VCToolsVersion",
+            "VisualStudioVersion",
+            "VSINSTALLDIR",
+            "WindowsLibPath",
+            "WindowsSdkBinPath",
+            "WindowsSdkDir",
+            "WindowsSDKLibVersion",
+            "WindowsSdkVerBinPath",
+            "WindowsSDKVersion"
+          )
+          foreach ($line in $envLines) {
+            $parts = $line -split "=", 2
+            if ($parts.Count -eq 2 -and $exportNames -contains $parts[0]) {
+              "$($parts[0])=$($parts[1])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            }
+          }
+
+      - name: Expose MSYS2 NASM to the Windows build
+        if: matrix.buildFamily == 'windows-msvc' && matrix.arch == 'x86_64'
+        shell: pwsh
+        run: |
+          $msys2Location = '${{ steps.msys2.outputs.msys2-location }}'
+          if ([string]::IsNullOrWhiteSpace($msys2Location)) {
+            throw 'msys2/setup-msys2 did not report its installation directory.'
+          }
+          $msysNasm = Join-Path $msys2Location 'usr\bin\nasm.exe'
+          if (!(Test-Path $msysNasm)) {
+            throw "MSYS2 NASM was not installed: $msysNasm"
+          }
+          "FFMPEG_NASM=$msysNasm" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Bootstrap pinned vcpkg on macOS
+        if: matrix.buildFamily == 'macos'
+        run: ./.vcpkg-root/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Bootstrap pinned vcpkg on Windows
+        if: matrix.buildFamily == 'windows-msvc'
+        shell: pwsh
+        run: |
+          & "${{ github.workspace }}\.vcpkg-root\bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Install macOS x64 assembler tool
+        if: matrix.buildFamily == 'macos' && matrix.arch == 'x86_64'
+        run: |
+          rm -rf /usr/local/Homebrew/Library/Taps/aws/homebrew-tap
+          rm -rf /opt/homebrew/Library/Taps/aws/homebrew-tap
+          brew install nasm
+
+      - name: Show Windows runner
+        if: matrix.buildFamily == 'windows-msvc'
+        shell: pwsh
+        run: |
+          systeminfo | Select-String "OS Name", "OS Version", "System Type"
+          clang-cl --version | Select-Object -First 1
+          link 2>&1 | Select-Object -First 1
+          cmake --version
+          bash --version
+          python --version
+          nasm -v
+          Write-Host "ImageOS=$env:ImageOS ImageVersion=$env:ImageVersion"
+          Write-Host "VS=$env:VSINSTALLDIR MSVC=$env:VCToolsVersion WindowsSDK=$env:WindowsSDKVersion"
+          Get-PSDrive -Name C
+          git -C .vcpkg-root rev-parse HEAD
+
+      - name: Resolve runner image for dependency cache
+        id: runner-image
+        shell: bash
+        run: echo "version=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore or save pinned vcpkg packages
+        id: vcpkg-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-binary-cache
+          key: vcpkg-${{ matrix.key }}-${{ steps.runner-image.outputs.version }}-${{ needs.prepare-matrix.outputs.vcpkg_commit }}-${{ hashFiles('vcpkg.json', 'ports/**') }}
+
+      - name: Require dependency cache from preflight
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          echo "The four-platform preflight cache is unavailable; stop before repeated dependency compilation." >&2
+          exit 1
+
+      - name: Install macOS v2 dependencies
+        if: matrix.buildFamily == 'macos'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+          VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-binary-cache,readwrite
+        run: |
+          "${{ github.workspace }}/.vcpkg-root/vcpkg" install \
+            --dry-run \
+            --vcpkg-root "${{ github.workspace }}/.vcpkg-root" \
+            --triplet "${{ matrix.triplet }}" \
+            --overlay-ports "${{ github.workspace }}/ports" \
+            --x-install-root "${{ github.workspace }}/.vcpkg-installed"
+          "${{ github.workspace }}/.vcpkg-root/vcpkg" install \
+            --vcpkg-root "${{ github.workspace }}/.vcpkg-root" \
+            --triplet "${{ matrix.triplet }}" \
+            --overlay-ports "${{ github.workspace }}/ports" \
+            --x-install-root "${{ github.workspace }}/.vcpkg-installed" \
+            --clean-after-build
+
+      - name: Install Windows v2 dependencies
+        if: matrix.buildFamily == 'windows-msvc'
+        shell: pwsh
+        env:
+          VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-binary-cache,readwrite
+        run: |
           $vcpkgRoot = "${{ github.workspace }}\.vcpkg-root"
+          & "$vcpkgRoot\vcpkg.exe" install `
+            --dry-run `
+            --vcpkg-root "$vcpkgRoot" `
+            --triplet "${{ matrix.triplet }}" `
+            --overlay-ports "${{ github.workspace }}\ports" `
+            --x-install-root "${{ github.workspace }}/.vcpkg-installed"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$vcpkgRoot\vcpkg.exe" install `
             --vcpkg-root "$vcpkgRoot" `
             --triplet "${{ matrix.triplet }}" `
@@ -271,154 +547,97 @@ jobs:
           VCPKG_INSTALLED_DIR: ${{ github.workspace }}/.vcpkg-installed
         run: scripts/build-windows-msvc.ps1
 
-      - name: Upload SDK archive
+      - name: Resolve SDK artifact name
+        id: sdk-artifact
+        shell: bash
+        env:
+          SDK_PLATFORM: ${{ matrix.key }}
+        run: |
+          set -euo pipefail
+          ffmpeg_version="$(python3 -c 'import json; print(json.load(open("config/sdk-version.json"))["ffmpegVersion"])')"
+          sdk_version="$(python3 -c 'import json; print(json.load(open("config/sdk-version.json"))["sdkVersion"])')"
+          echo "name=ffmpeg-sdk-${ffmpeg_version}-v${sdk_version}-${SDK_PLATFORM}" >> "$GITHUB_OUTPUT"
+
+      - name: Pack SDK directory for transfer
+        shell: bash
+        env:
+          SDK_ARTIFACT_NAME: ${{ steps.sdk-artifact.outputs.name }}
+        run: |
+          set -euo pipefail
+          sdk_root="build/${{ matrix.key }}/sdk/${SDK_ARTIFACT_NAME}"
+          [[ -f "${sdk_root}/manifest.json" ]] || {
+            echo "Staged SDK manifest is missing: ${sdk_root}" >&2
+            exit 1
+          }
+          tar -C "$(dirname "${sdk_root}")" -cf "${RUNNER_TEMP}/${SDK_ARTIFACT_NAME}.tar" "$(basename "${sdk_root}")"
+
+      - name: Upload SDK transfer archive
         uses: actions/upload-artifact@v7
         with:
-          name: ffmpeg-sdk-${{ matrix.key }}
-          path: |
-            dist/ffmpeg-sdk-*-${{ matrix.key }}.zip
-            dist/ffmpeg-sdk-*-${{ matrix.key }}.zip.sha256
+          name: ${{ steps.sdk-artifact.outputs.name }}-stage
+          path: ${{ runner.temp }}/${{ steps.sdk-artifact.outputs.name }}.tar
+          archive: false
           if-no-files-found: error
           retention-days: 14
 
-  publish-release:
-    name: Publish GitHub Release
-    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/v')
+  package-candidate:
+    name: Package unpublished SDK candidate
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'candidate'
     runs-on: ubuntu-latest
-    needs:
-      - prepare-matrix
-      - build-sdk
+    needs: [prepare-matrix, build-sdk]
     timeout-minutes: 15
-    permissions:
-      contents: write
-    concurrency:
-      group: ffmpeg-sdk-release-${{ needs.prepare-matrix.outputs.sdk_version }}
-      cancel-in-progress: false
-
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Download SDK artifacts
+      - name: Download SDK directories
         uses: actions/download-artifact@v8
         with:
-          pattern: ffmpeg-sdk-*
-          path: release-assets
-          merge-multiple: true
+          pattern: ffmpeg-sdk-*-stage
+          path: staged-transfer
 
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Archive SDKs
+        shell: bash
         run: |
+          set -euo pipefail
+          mkdir -p staged-sdks candidate-assets
+          for transfer_dir in staged-transfer/*; do
+            [[ -d "${transfer_dir}" ]] || continue
+            transfer_archive="$(find "${transfer_dir}" -maxdepth 1 -type f -name 'ffmpeg-sdk-*.tar' -print -quit)"
+            [[ -n "${transfer_archive}" ]] || {
+              echo "Downloaded SDK transfer archive is missing: ${transfer_dir}" >&2
+              exit 1
+            }
+            tar -xf "${transfer_archive}" -C staged-sdks
+          done
+          for sdk_dir in staged-sdks/*; do
+            [[ -d "${sdk_dir}" ]] || continue
+            sdk_name="$(basename "${sdk_dir}")"
+            [[ -f "${sdk_dir}/manifest.json" ]] || {
+              echo "Downloaded SDK artifact is missing manifest.json: ${sdk_dir}" >&2
+              exit 1
+            }
+            (cd staged-sdks && zip -qr "../candidate-assets/${sdk_name}.zip" "${sdk_name}")
+            sha256sum "candidate-assets/${sdk_name}.zip" > "candidate-assets/${sdk_name}.zip.sha256"
+          done
+
+      - name: Generate candidate index
+        shell: bash
+        run: |
+          set -euo pipefail
           sdk_version="${{ needs.prepare-matrix.outputs.sdk_version }}"
-          ffmpeg_version="$(python3 -c 'import json; print(json.load(open("config/sdk-version.json"))["ffmpegVersion"])')"
-          release_tag="v${sdk_version}"
-          release_title="FFmpeg SDK ${ffmpeg_version} v${sdk_version}"
-          release_base_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${release_tag}"
-
-          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != "${release_tag}" ]]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match SDK version ${release_tag}." >&2
-            exit 1
-          fi
-
-          existing_release_id="$(
-            gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-              --jq ".[] | select(.tag_name == \"${release_tag}\") | .id"
-          )"
-          if [[ -n "${existing_release_id}" ]]; then
-            echo "Release ${release_tag} already exists. Publish a new sdkVersion instead of replacing it." >&2
-            exit 1
-          fi
-
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            if git ls-remote --exit-code --tags origin "refs/tags/${release_tag}" >/dev/null 2>&1; then
-              echo "Tag ${release_tag} already exists. Publish a new sdkVersion instead of reusing it." >&2
-              exit 1
-            else
-              tag_lookup_status="$?"
-              if [[ "${tag_lookup_status}" -ne 2 ]]; then
-                echo "Could not verify whether tag ${release_tag} already exists." >&2
-                exit "${tag_lookup_status}"
-              fi
-            fi
-          else
-            tag_commit="$(git rev-list -n 1 "${GITHUB_REF_NAME}")"
-            if [[ "${tag_commit}" != "${GITHUB_SHA}" ]]; then
-              echo "Tag ${GITHUB_REF_NAME} resolves to ${tag_commit}, not trigger commit ${GITHUB_SHA}." >&2
-              exit 1
-            fi
-          fi
-
           python3 scripts/generate-artifact-index.py \
-            --release-assets release-assets \
-            --output release-assets/artifact-index.json \
-            --base-url "${release_base_url}" \
-            --release-tag "${release_tag}"
+            --release-assets candidate-assets \
+            --output candidate-assets/artifact-index.json \
+            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${sdk_version}" \
+            --release-tag "v${sdk_version}"
+          python3 scripts/validate-candidate-assets.py --assets candidate-assets
 
-          expected_platform_count="$(python3 - <<'PY'
-          import json
-
-          with open("config/platform-matrix.json", encoding="utf-8") as handle:
-              platforms = json.load(handle)["platforms"]
-
-          print(sum(1 for platform in platforms if platform["enabled"]))
-          PY
-          )"
-          expected_release_asset_count="$((expected_platform_count + 1))"
-
-          mapfile -t release_files < <(
-            find release-assets -maxdepth 1 -type f \
-              \( -name 'ffmpeg-sdk-*.zip' -o -name 'artifact-index.json' \) \
-              | sort
-          )
-
-          if [[ "${#release_files[@]}" -ne "${expected_release_asset_count}" ]]; then
-            echo "Expected ${expected_platform_count} SDK ZIPs plus artifact-index.json, found ${#release_files[@]}." >&2
-            printf '%s\n' "${release_files[@]}" >&2
-            exit 1
-          fi
-
-          mapfile -t expected_asset_names < <(
-            printf '%s\n' "${release_files[@]}" | xargs -n1 basename | sort
-          )
-
-          if printf '%s\n' "${expected_asset_names[@]}" | grep -q '\.sha256$'; then
-            echo "Release file selection must not contain .sha256 assets." >&2
-            exit 1
-          fi
-
-          release_args=(
-            gh release create "${release_tag}"
-            --draft
-            --title "${release_title}"
-            --notes "Cloud-built FFmpeg SDK for desktop clients. This release is immutable; publish a new sdkVersion for rebuilds."
-          )
-
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            release_args+=(--target "${GITHUB_SHA}")
-          else
-            release_args+=(--verify-tag)
-          fi
-
-          "${release_args[@]}"
-          gh release upload "${release_tag}" "${release_files[@]}"
-          gh release edit "${release_tag}" --draft=false
-
-          mapfile -t published_asset_names < <(
-            gh release view "${release_tag}" --json assets --jq '.assets[].name' | sort
-          )
-
-          if ! diff -u \
-              <(printf '%s\n' "${expected_asset_names[@]}") \
-              <(printf '%s\n' "${published_asset_names[@]}"); then
-            echo "Published release assets do not match expected files." >&2
-            exit 1
-          fi
-
-          release_immutable="$(
-            gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${release_tag}" --jq '.immutable'
-          )"
-          if [[ "${release_immutable}" != "true" ]]; then
-            echo "Published release is not immutable: ${release_immutable}" >&2
-            exit 1
-          fi
+      - name: Upload unpublished candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: ffmpeg-sdk-v2-candidate
+          path: candidate-assets/*
+          archive: false
+          if-no-files-found: error
+          retention-days: 14

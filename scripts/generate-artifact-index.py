@@ -51,7 +51,6 @@ def main():
 
         artifacts.append({
             "platform": platform["key"],
-            "profile": platform["profile"],
             "minimumSystemVersion": platform["minimumSystemVersion"],
             "os": platform["os"],
             "arch": platform["arch"],

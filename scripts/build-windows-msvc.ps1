@@ -6,6 +6,9 @@ Set-Location $RootDir
 
 $SdkArch = if ($env:SDK_ARCH) { $env:SDK_ARCH } else { "x86_64" }
 $NativeArm64Host = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64
+if ($SdkArch -eq "arm64" -and !$NativeArm64Host) {
+    throw "Windows ARM64 SDK validation requires a native ARM64 runner"
+}
 switch ($SdkArch) {
     "x86_64" {
         $FfmpegArch = "x86_64"
@@ -17,7 +20,7 @@ switch ($SdkArch) {
     }
     "arm64" {
         $FfmpegArch = "aarch64"
-        $FfmpegCrossCompileFlag = if ($NativeArm64Host) { "" } else { "--enable-cross-compile" }
+        $FfmpegCrossCompileFlag = ""
         $FfmpegTargetCflags = "--target=arm64-windows"
         $FfmpegTargetLdflags = ""
         $FfmpegAssemblyFlag = "--disable-asm"
@@ -34,13 +37,11 @@ $PlatformDeclaration = @($PlatformMatrix.platforms | Where-Object { $_.key -eq $
 if ($PlatformDeclaration.Count -ne 1) {
     throw "config/platform-matrix.json must declare exactly one entry for $PlatformKey"
 }
-$ArtifactProfile = $PlatformDeclaration[0].profile
 $MinimumSystemVersion = $PlatformDeclaration[0].minimumSystemVersion
-if ([string]::IsNullOrWhiteSpace($ArtifactProfile) -or [string]::IsNullOrWhiteSpace($MinimumSystemVersion)) {
-    throw "$PlatformKey must declare non-empty profile and minimumSystemVersion"
+if ([string]::IsNullOrWhiteSpace($MinimumSystemVersion)) {
+    throw "$PlatformKey must declare non-empty minimumSystemVersion"
 }
 $BuildRoot = if ($env:BUILD_ROOT) { $env:BUILD_ROOT } else { Join-Path $RootDir "build/$PlatformKey" }
-$DistDir = if ($env:DIST_DIR) { $env:DIST_DIR } else { Join-Path $RootDir "dist" }
 
 $SdkConfig = Get-Content "config/sdk-version.json" -Raw | ConvertFrom-Json
 $SourceLock = Get-Content "config/source-lock.json" -Raw | ConvertFrom-Json
@@ -50,14 +51,17 @@ $LicenseMode = $SdkConfig.licenseMode
 $FeatureProfile = $SdkConfig.featureProfile
 $VcpkgBaseline = $SdkConfig.vcpkgBaseline
 $ProfileConfig = Get-Content "config/ffmpeg-profile.json" -Raw | ConvertFrom-Json
+$ExternalDependenciesJson = ConvertTo-Json -InputObject @($ProfileConfig.externalDependencies) -Compress
 if ($ProfileConfig.profile -ne $FeatureProfile) {
     throw "config/ffmpeg-profile.json profile $($ProfileConfig.profile) does not match sdk-version featureProfile $FeatureProfile"
 }
 if ($ProfileConfig.licenseMode -ne $LicenseMode) {
     throw "config/ffmpeg-profile.json licenseMode $($ProfileConfig.licenseMode) does not match sdk-version licenseMode $LicenseMode"
 }
-$FeaturesJson = (@($ProfileConfig.features.common) + @($ProfileConfig.features.windows) | ConvertTo-Json -Compress)
 $ProfileConfigureFlags = @($ProfileConfig.configure.common) + @($ProfileConfig.configure.windows)
+if ($SdkArch -eq "x86_64") {
+    $ProfileConfigureFlags += @($ProfileConfig.configure.windows_x86_64)
+}
 
 function ConvertTo-BashSingleQuoted {
     param([Parameter(Mandatory = $true)][string]$Value)
@@ -83,7 +87,6 @@ $InstallPrefix = Join-Path $BuildRoot "install"
 $SdkParentDir = Join-Path $BuildRoot "sdk"
 $SdkDirName = "ffmpeg-sdk-$FfmpegVersion-v$SdkVersion-$PlatformKey"
 $SdkRoot = Join-Path $SdkParentDir $SdkDirName
-$ArchivePath = Join-Path $DistDir "$SdkDirName.zip"
 $BuildToolsDir = Join-Path $BuildRoot "tools"
 $LibAliasDir = Join-Path $BuildRoot "lib-alias"
 $VcpkgRoot = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } elseif ($env:VCPKG_INSTALLATION_ROOT) { $env:VCPKG_INSTALLATION_ROOT } else { "C:\vcpkg" }
@@ -98,21 +101,26 @@ $RequiredVcpkgDependencyHeaders = @(
     "include/opus/opus.h",
     "include/vorbis/codec.h",
     "include/opencore-amrnb/interf_enc.h",
+    "include/opencore-amrwb/dec_if.h",
     "include/x264.h",
     "include/x265.h",
     "include/zlib.h"
 )
 foreach ($RequiredHeader in $RequiredVcpkgDependencyHeaders) {
     if (!(Test-Path (Join-Path $VcpkgDependencyRoot $RequiredHeader))) {
-        throw "$RequiredHeader from $VcpkgTriplet must be installed with vcpkg before building the desktop LGPL app SDK profile"
+        throw "$RequiredHeader from $VcpkgTriplet must be installed with vcpkg before building the v2 SDK profile"
     }
 }
 if (!(Test-Path (Join-Path $VcpkgDependencyRoot "lib"))) {
-    throw "vcpkg lib directory for $VcpkgTriplet is required before building the desktop LGPL app SDK profile"
+    throw "vcpkg lib directory for $VcpkgTriplet is required before building the v2 SDK profile"
 }
 $VpxImportLib = Join-Path $VcpkgDependencyRoot "lib/vpx.lib"
 if (!(Test-Path $VpxImportLib)) {
     throw "vpx.lib from $VcpkgTriplet is required for FFmpeg libvpx VP8/VP9 linking"
+}
+$AmrWbImportLib = Join-Path $VcpkgDependencyRoot "lib/opencore-amrwb.lib"
+if (!(Test-Path $AmrWbImportLib)) {
+    throw "opencore-amrwb.lib from $VcpkgTriplet is required for FFmpeg AMR-WB decoding"
 }
 
 New-Item -ItemType Directory -Force $LibAliasDir | Out-Null
@@ -215,9 +223,8 @@ $PkgConfigExe = $PkgConfigCandidates[0].FullName
 
 New-Item -ItemType Directory -Force (Join-Path $BuildRoot "downloads") | Out-Null
 New-Item -ItemType Directory -Force (Join-Path $BuildRoot "src") | Out-Null
-New-Item -ItemType Directory -Force $DistDir | Out-Null
 New-Item -ItemType Directory -Force $BuildToolsDir | Out-Null
-Remove-Item -Recurse -Force $InstallPrefix, $SdkRoot, $ArchivePath, "$ArchivePath.sha256" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force $InstallPrefix, $SdkRoot -ErrorAction SilentlyContinue
 
 if (!(Test-Path $SourceArchive)) {
     Invoke-WebRequest `
@@ -271,7 +278,8 @@ cygpath -u "`${args[@]}"
 EOF
 chmod +x '$MsysBuildToolsDir/wslpath'
 export PATH='${MsysBuildToolsDir}:${MsysPkgConfigDir}:${MsysNasmDir}:'"`$PATH"':/usr/bin'
-export PKG_CONFIG_PATH='${MsysVcpkgDependencyRoot}/lib/pkgconfig:${MsysVcpkgDependencyRoot}/share/pkgconfig'":`${PKG_CONFIG_PATH:-}"
+export PKG_CONFIG_LIBDIR='${MsysVcpkgDependencyRoot}/lib/pkgconfig:${MsysVcpkgDependencyRoot}/share/pkgconfig'
+export PKG_CONFIG_PATH=''
 echo "bash: `$(command -v bash)"
 echo "awk: `$(command -v awk)"
 echo "clang-cl: `$(command -v clang-cl)"
@@ -315,16 +323,21 @@ $FfmpegProfileConfigureArgs
 fi
 if ! cmake \
   -D SOURCE_DIR='$MsysSourceDir' \
+  -D SDK_PLATFORM=windows \
+  -D SDK_ARCH='$SdkArch' \
   -P '$MsysRootDir/scripts/validate-ffmpeg-components.cmake'; then
   echo "FFmpeg component validation failed; libvpx VP9 configure context follows:" >&2
   grep -n -C 32 "check_pkg_config libvpx_vp9_encoder" ffbuild/config.log >&2 || cat ffbuild/config.log >&2 || true
   exit 1
 fi
+if [[ "`${SDK_CONFIGURE_ONLY:-0}" == "1" ]]; then
+  echo 'Configure-only preflight passed for $PlatformKey.'
+  exit 0
+fi
 make -j`$(nproc)
 find . -name '*.d' -delete
 make install
 mkdir -p '$MsysInstallPrefix/lib'
-mkdir -p '$MsysInstallPrefix/licenses/lame'
 for import_lib in avcodec avdevice avfilter avformat avutil swresample swscale; do
   import_lib_path="lib`${import_lib}/`${import_lib}.lib"
   if [[ ! -f "`${import_lib_path}" ]]; then
@@ -344,12 +357,6 @@ if [[ -d '$MsysVcpkgDependencyRoot/bin' ]]; then
   find '$MsysVcpkgDependencyRoot/bin' -maxdepth 1 -type f -iname '*.dll' \
     -exec cp -p {} '$MsysInstallPrefix/bin/' \;
 fi
-for package_name in mp3lame libvpx aom opus libvorbis libogg opencore-amr x264 x265 zlib; do
-  mkdir -p "$MsysInstallPrefix/licenses/`${package_name}"
-  if [[ -f "$MsysVcpkgDependencyRoot/share/`${package_name}/copyright" ]]; then
-    cp -p "$MsysVcpkgDependencyRoot/share/`${package_name}/copyright" "$MsysInstallPrefix/licenses/`${package_name}/LICENSE"
-  fi
-done
 "@
 
 $ConfigureScriptPath = Join-Path $BuildToolsDir "run-ffmpeg-build.sh"
@@ -358,15 +365,40 @@ bash --login "$ConfigureScriptPath"
 if ($LASTEXITCODE -ne 0) {
     throw "FFmpeg Windows MSVC build failed"
 }
+if ($env:SDK_CONFIGURE_ONLY -eq "1") {
+    Write-Host "Configure-only preflight passed for $PlatformKey."
+    exit 0
+}
 
 bash "$MsysRootDir/scripts/stage-sdk.sh" `
     --source "$MsysSourceDir" `
     --prefix "$MsysInstallPrefix" `
     --output "$MsysSdkRoot" `
     --platform windows `
-    --arch "$SdkArch"
+    --arch "$SdkArch" `
+    --vcpkg-root "$MsysVcpkgDependencyRoot"
 if ($LASTEXITCODE -ne 0) {
     throw "Windows SDK staging failed"
+}
+
+& python "$RootDir/scripts/validate-sdk-dependencies.py" `
+    --sdk-root "$SdkRoot" `
+    --platform windows `
+    --vcpkg-root "$VcpkgInstalledDir" `
+    --triplet "$VcpkgTriplet"
+if ($LASTEXITCODE -ne 0) {
+    throw "Windows SDK dependency closure validation failed"
+}
+
+& python "$RootDir/scripts/generate-components.py" `
+    --ffmpeg (Join-Path $SdkRoot "bin/ffmpeg.exe") `
+    --parser-registry (Join-Path $SourceDir "libavcodec/parser_list.c") `
+    --output (Join-Path $SdkRoot "components.json") `
+    --platform-key "$PlatformKey" `
+    --feature-profile "$FeatureProfile" `
+    --ffmpeg-version "$FfmpegVersion"
+if ($LASTEXITCODE -ne 0) {
+    throw "Windows SDK component inventory failed"
 }
 
 $Python = (Get-Command python -ErrorAction Stop).Source
@@ -379,7 +411,8 @@ if (!(Test-Path $StagedFfmpeg)) {
     --ffmpeg $StagedFfmpeg `
     --require-encoder "libvpx-vp9" `
     --require-bsf "h264_metadata" `
-    --require-bsf "hevc_metadata"
+    --require-bsf "hevc_metadata" `
+    --components (Join-Path $SdkRoot "components.json")
 if ($LASTEXITCODE -ne 0) {
     throw "Windows SDK runtime capability validation failed"
 }
@@ -400,14 +433,14 @@ cmake `
     -D "FFMPEG_VERSION=$FfmpegVersion" `
     -D "SDK_PLATFORM=windows" `
     -D "SDK_ARCH=$SdkArch" `
-    -D "ARTIFACT_PROFILE=$ArtifactProfile" `
     -D "MINIMUM_SYSTEM_VERSION=$MinimumSystemVersion" `
     -D "SDK_COMPILER=$(& clang-cl --version 2>&1 | Select-Object -First 1)" `
     -D "VCPKG_BASELINE=$VcpkgBaseline" `
     -D "VCPKG_TRIPLET=$VcpkgTriplet" `
     -D "FFMPEG_SOURCE_URL=$FfmpegSourceUrl" `
     -D "FFMPEG_SOURCE_SHA256=$FfmpegSourceSha256" `
-    -D "SDK_FEATURES_JSON=$FeaturesJson" `
+    -D "FEATURE_PROFILE=$FeatureProfile" `
+    -D "SDK_EXTERNAL_DEPENDENCIES_JSON=$ExternalDependenciesJson" `
     -D "LICENSE_MODE=$LicenseMode" `
     -D "BUILD_ID=$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)" `
     -D "CREATED_AT=$((Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))" `
@@ -421,10 +454,15 @@ if ($LASTEXITCODE -ne 0) {
     --require-encoder "libvpx-vp9" `
     --require-bsf "h264_metadata" `
     --require-bsf "hevc_metadata" `
-    --manifest (Join-Path $SdkRoot "manifest.json")
+    --components (Join-Path $SdkRoot "components.json")
 if ($LASTEXITCODE -ne 0) {
     throw "Windows SDK manifest/runtime capability validation failed"
 }
+
+& $Python "$RootDir/scripts/validate-media-coverage.py" --ffmpeg $StagedFfmpeg --ffprobe (Join-Path $SdkRoot "bin/ffprobe.exe")
+if ($LASTEXITCODE -ne 0) { throw "Windows SDK media coverage validation failed" }
+& $Python "$RootDir/scripts/validate-https-input.py" --ffmpeg $StagedFfmpeg
+if ($LASTEXITCODE -ne 0) { throw "Windows SDK HTTPS input validation failed" }
 
 cmake `
     -D "SDK_ROOT=$SdkRoot" `
@@ -436,9 +474,4 @@ if ($LASTEXITCODE -ne 0) {
     throw "Windows SDK validation failed"
 }
 
-Compress-Archive -Path $SdkRoot -DestinationPath $ArchivePath -Force
-$ArchiveHash = (Get-FileHash -Algorithm SHA256 $ArchivePath).Hash.ToLowerInvariant()
-Set-Content -Path "$ArchivePath.sha256" -Value $ArchiveHash -NoNewline
-
-Write-Host "SDK archive: $ArchivePath"
-Write-Host "SHA256     : $ArchiveHash"
+Write-Host "SDK directory: $SdkRoot"

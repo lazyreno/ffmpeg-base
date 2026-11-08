@@ -9,6 +9,15 @@ BUILD_SCRIPT = REPO_ROOT / "scripts" / "build-windows-msvc.ps1"
 
 
 class WindowsRuntimeMatrixTest(unittest.TestCase):
+    def test_v2_configure_only_uses_one_profile_and_native_arm64(self):
+        script = BUILD_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("$ProfileConfig.configure.windows_x86_64", script)
+        self.assertIn("SDK_CONFIGURE_ONLY", script)
+        self.assertIn("SDK_ARCH=$SdkArch", script)
+        self.assertNotIn("$ProfileConfig.features", script)
+        self.assertNotIn("$FeaturesJson", script)
+        self.assertNotIn("desktop LGPL app SDK profile", script)
+
     def test_windows_artifacts_use_native_runners_and_runtime_validation(self):
         platforms = json.loads(PLATFORM_MATRIX.read_text(encoding="utf-8"))["platforms"]
         by_key = {platform["key"]: platform for platform in platforms}
