@@ -267,6 +267,8 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "11.0"
           VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-binary-cache,readwrite
+          X_VCPKG_ASSET_SOURCES: x-script,python3 ${{ github.workspace }}/scripts/fetch-vcpkg-github-asset.py {url} {sha512} {dst}
+          GH_TOKEN: ${{ github.token }}
         run: |
           "${{ github.workspace }}/.vcpkg-root/vcpkg" install \
             --dry-run \
@@ -286,6 +288,8 @@ jobs:
         shell: pwsh
         env:
           VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-binary-cache,readwrite
+          X_VCPKG_ASSET_SOURCES: x-script,python ${{ github.workspace }}/scripts/fetch-vcpkg-github-asset.py {url} {sha512} {dst}
+          GH_TOKEN: ${{ github.token }}
         run: |
           $vcpkgRoot = "${{ github.workspace }}\.vcpkg-root"
           & "$vcpkgRoot\vcpkg.exe" install `

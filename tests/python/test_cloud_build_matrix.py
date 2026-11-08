@@ -51,6 +51,8 @@ class CloudBuildMatrixTest(unittest.TestCase):
         self.assertEqual(1, workflow.count("python scripts/prefetch-vcpkg-tools.py"))
         self.assertIn("brew install autoconf autoconf-archive automake libtool", workflow)
         self.assertIn("glibtoolize", workflow)
+        self.assertIn("X_VCPKG_ASSET_SOURCES", workflow)
+        self.assertIn("fetch-vcpkg-github-asset.py", workflow)
 
 
 if __name__ == "__main__":
