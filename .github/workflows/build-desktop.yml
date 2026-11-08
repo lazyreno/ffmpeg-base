@@ -262,13 +262,6 @@ jobs:
           path: ${{ github.workspace }}/.vcpkg-binary-cache
           key: vcpkg-${{ matrix.key }}-${{ steps.runner-image.outputs.version }}-${{ needs.prepare-matrix.outputs.vcpkg_commit }}-${{ hashFiles('vcpkg.json', 'ports/**') }}
 
-      - name: Require dependency cache from preflight
-        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          echo "The four-platform preflight cache is unavailable; stop before repeated dependency compilation." >&2
-          exit 1
-
       - name: Install macOS v2 dependencies
         if: matrix.buildFamily == 'macos'
         env:

@@ -26,6 +26,7 @@ forbid_text("${matrix}" "\"profile\"" "Old artifact profiles must be removed")
 forbid_text("${manifest}" "@ARTIFACT_PROFILE@" "Manifest must not carry old artifact profile")
 
 forbid_text("${workflow}" "preflight-sdk:" "Manual builds use the full SDK build")
+forbid_text("${workflow}" "Require dependency cache from preflight" "Cache misses must build dependencies")
 require_text("${workflow}" "needs: prepare-matrix" "Build must use the platform matrix")
 require_text("${workflow}" "if: github.event_name == 'workflow_dispatch'" "Manual build must be explicit")
 require_text("${workflow}" "package-candidate:" "Candidate package required")

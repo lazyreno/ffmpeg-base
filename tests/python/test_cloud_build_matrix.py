@@ -32,6 +32,8 @@ class CloudBuildMatrixTest(unittest.TestCase):
     def test_manual_build_uses_generated_matrix_without_preflight_or_publish(self):
         workflow = (ROOT / ".github/workflows/build-desktop.yml").read_text()
         self.assertNotIn("preflight-sdk:", workflow)
+        self.assertNotIn("Require dependency cache from preflight", workflow)
+        self.assertNotIn("steps.vcpkg-cache.outputs.cache-hit != 'true'", workflow)
         self.assertIn("needs: prepare-matrix", workflow)
         self.assertIn("if: github.event_name == 'workflow_dispatch'", workflow)
         self.assertNotIn("publish-release:", workflow)
