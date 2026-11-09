@@ -359,13 +359,13 @@ jobs:
             echo "Staged SDK manifest is missing: ${sdk_root}" >&2
             exit 1
           }
-          tar -C "$(dirname "${sdk_root}")" -cf "${RUNNER_TEMP}/${SDK_ARTIFACT_NAME}.tar" "$(basename "${sdk_root}")"
+          tar -C "$(dirname "${sdk_root}")" -cf "./${SDK_ARTIFACT_NAME}.tar" "$(basename "${sdk_root}")"
 
       - name: Upload SDK transfer archive
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.sdk-artifact.outputs.name }}-stage
-          path: ${{ runner.temp }}/${{ steps.sdk-artifact.outputs.name }}.tar
+          path: ${{ github.workspace }}/${{ steps.sdk-artifact.outputs.name }}.tar
           archive: false
           if-no-files-found: error
           retention-days: 14

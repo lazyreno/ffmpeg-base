@@ -64,6 +64,12 @@ class CloudBuildMatrixTest(unittest.TestCase):
         self.assertIn('$env:X_VCPKG_ASSET_SOURCES = "x-script,$python', workflow)
         self.assertNotIn("X_VCPKG_ASSET_SOURCES: x-script,python ${{ github.workspace }}", workflow)
 
+    def test_sdk_transfer_archive_uses_cross_platform_paths(self):
+        workflow = (ROOT / ".github/workflows/build-desktop.yml").read_text()
+        self.assertIn('-cf "./${SDK_ARTIFACT_NAME}.tar"', workflow)
+        self.assertIn('path: ${{ github.workspace }}/${{ steps.sdk-artifact.outputs.name }}.tar', workflow)
+        self.assertNotIn('"${RUNNER_TEMP}/${SDK_ARTIFACT_NAME}.tar"', workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
