@@ -390,6 +390,7 @@ jobs:
           update: false
           cache: false
           release: false
+          install: make
       - name: Setup MSVC for probe
         shell: pwsh
         run: |

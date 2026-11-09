@@ -243,6 +243,10 @@ tar -xzf $SourceArchive -C (Join-Path $BuildRoot "src")
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to extract FFmpeg source archive"
 }
+& python "$RootDir/scripts/patch-windows-response-file.py" "$SourceDir"
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to patch FFmpeg Windows response-file recipe"
+}
 
 $env:GIT_CEILING_DIRECTORIES = (Join-Path $BuildRoot "src").Replace("\", "/")
 $MsysSourceDir = cygpath -u $SourceDir

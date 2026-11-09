@@ -83,6 +83,15 @@ file:
 	@test -s libavcodec/avcodec-make3.dll.objs
 EOF
 if make -f ci-probe.mk file; then echo MAKE_FILE_FUNCTION_OK; else echo MAKE_FILE_FUNCTION_FAILED; fi
+cat >> ci-probe.mk <<'EOF'
+define EVAL_RESPONSE_RULE
+libavcodec/avcodec-eval.dll.objs:
+	$$(file >$$@,$$(OBJS))
+	@test -s $$@
+endef
+$(eval $(EVAL_RESPONSE_RULE))
+EOF
+if make -f ci-probe.mk libavcodec/avcodec-eval.dll.objs; then echo MAKE_EVAL_FILE_OK; else echo MAKE_EVAL_FILE_FAILED; fi
 '@
 $probePath = Join-Path $env:GITHUB_WORKSPACE 'ci-probe.sh'
 Set-Content -LiteralPath $probePath -Value $probe -NoNewline -Encoding utf8NoBOM
