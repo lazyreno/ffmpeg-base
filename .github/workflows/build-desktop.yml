@@ -256,9 +256,9 @@ jobs:
         shell: bash
         run: echo "version=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
 
-      - name: Restore or save pinned vcpkg packages
+      - name: Restore pinned vcpkg packages
         id: vcpkg-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/.vcpkg-binary-cache
           key: vcpkg-${{ matrix.key }}-${{ steps.runner-image.outputs.version }}-${{ needs.prepare-matrix.outputs.vcpkg_commit }}-${{ hashFiles('vcpkg.json', 'ports/**') }}
@@ -311,6 +311,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
+
+      - name: Save pinned vcpkg packages before FFmpeg build
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-binary-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
 
       - name: Build macOS SDK
         if: matrix.buildFamily == 'macos'

@@ -122,6 +122,18 @@ $AmrWbImportLib = Join-Path $VcpkgDependencyRoot "lib/opencore-amrwb.lib"
 if (!(Test-Path $AmrWbImportLib)) {
     throw "opencore-amrwb.lib from $VcpkgTriplet is required for FFmpeg AMR-WB decoding"
 }
+$IconvImportLib = $null
+foreach ($LibraryName in @("iconv.lib", "libiconv.lib")) {
+    $Candidate = Join-Path $VcpkgDependencyRoot "lib/$LibraryName"
+    if (Test-Path $Candidate) {
+        $IconvImportLib = $Candidate
+        break
+    }
+}
+if (-not $IconvImportLib) {
+    throw "iconv.lib or libiconv.lib from $VcpkgTriplet is required for FFmpeg iconv linking"
+}
+$IconvLibraryName = Split-Path $IconvImportLib -Leaf
 
 New-Item -ItemType Directory -Force $LibAliasDir | Out-Null
 $LameImportLib = Join-Path $VcpkgDependencyRoot "lib/libmp3lame.lib"
@@ -224,6 +236,24 @@ $PkgConfigExe = $PkgConfigCandidates[0].FullName
 New-Item -ItemType Directory -Force (Join-Path $BuildRoot "downloads") | Out-Null
 New-Item -ItemType Directory -Force (Join-Path $BuildRoot "src") | Out-Null
 New-Item -ItemType Directory -Force $BuildToolsDir | Out-Null
+$IconvProbeSource = Join-Path $BuildToolsDir "iconv-link-probe.c"
+$IconvProbeExe = Join-Path $BuildToolsDir "iconv-link-probe.exe"
+Set-Content -LiteralPath $IconvProbeSource -Encoding utf8NoBOM -Value @'
+#include <iconv.h>
+int main(void) {
+    iconv_t converter = iconv_open("UTF-8", "ASCII");
+    return iconv_close(converter);
+}
+'@
+$IconvProbeArgs = @("/nologo", "/MD", "/I$VcpkgDependencyRoot/include")
+if ($SdkArch -eq "arm64") {
+    $IconvProbeArgs += "--target=arm64-windows"
+}
+$IconvProbeArgs += @($IconvProbeSource, "/Fe$IconvProbeExe", "/link", $IconvImportLib)
+& clang-cl @IconvProbeArgs
+if ($LASTEXITCODE -ne 0) {
+    throw "FFmpeg iconv import library failed to link for ${PlatformKey}: $IconvImportLib"
+}
 Remove-Item -Recurse -Force $InstallPrefix, $SdkRoot -ErrorAction SilentlyContinue
 
 if (!(Test-Path $SourceArchive)) {
@@ -246,6 +276,10 @@ if ($LASTEXITCODE -ne 0) {
 & python "$RootDir/scripts/patch-windows-response-file.py" "$SourceDir"
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to patch FFmpeg Windows response-file recipe"
+}
+& python "$RootDir/scripts/patch-windows-mediafoundation.py" "$SourceDir"
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to patch FFmpeg Windows Media Foundation version guard"
 }
 
 $env:GIT_CEILING_DIRECTORIES = (Join-Path $BuildRoot "src").Replace("\", "/")
@@ -319,6 +353,7 @@ if ! ./configure \
   $FfmpegCrossCompileFlag \
   --extra-cflags='$FfmpegTargetCflags -MD -I$VcpkgDependencyRootForMsvc/include' \
   --extra-ldflags='$FfmpegTargetLdflags $MsvcLibraryFlag $WindowsSdkUcrtLibraryFlag $WindowsSdkUmLibraryFlag /libpath:$LibAliasDirForMsvc /libpath:$VcpkgDependencyRootForMsvc/lib' \
+  --extra-libs='$IconvLibraryName' \
   $FfmpegAssemblyFlag \
 $FfmpegProfileConfigureArgs
   ; then
@@ -334,6 +369,7 @@ if ! cmake \
   grep -n -C 32 "check_pkg_config libvpx_vp9_encoder" ffbuild/config.log >&2 || cat ffbuild/config.log >&2 || true
   exit 1
 fi
+make -j1 libavcodec/mf_utils.o
 make -j`$(nproc)
 find . -name '*.d' -delete
 make install
