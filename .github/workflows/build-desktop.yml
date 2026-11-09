@@ -383,6 +383,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: msys2/setup-msys2@v2
+        id: msys2
         with:
           msystem: MSYS
           path-type: inherit
@@ -391,7 +392,7 @@ jobs:
           release: false
       - name: Probe MSVC resource and response-file paths
         shell: pwsh
-        run: scripts/probe-windows-runner.ps1 -Arch '${{ matrix.msvcArch }}'
+        run: scripts/probe-windows-runner.ps1 -Arch '${{ matrix.msvcArch }}' -Msys2Root '${{ steps.msys2.outputs.msys2-location }}'
 
   publish-release:
     name: Publish GitHub Release
