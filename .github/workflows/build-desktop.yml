@@ -390,9 +390,37 @@ jobs:
           update: false
           cache: false
           release: false
+      - name: Setup MSVC for probe
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $requiredComponent = if ("${{ matrix.arch }}" -eq "arm64") {
+            "Microsoft.VisualStudio.Component.VC.Tools.ARM64"
+          } else {
+            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+          }
+          $vsInstall = & $vswhere -latest -products * -requires $requiredComponent -property installationPath
+          if (-not $vsInstall) { throw "Visual Studio with MSVC tools was not found." }
+          $vcvars = Join-Path $vsInstall "VC\Auxiliary\Build\vcvarsall.bat"
+          $envLines = cmd /s /c "`"$vcvars`" ${{ matrix.msvcArch }} && set"
+          $exportNames = @(
+            "CommandPromptType", "DevEnvDir", "EXTERNAL_INCLUDE", "FrameworkDir",
+            "FrameworkDir64", "FrameworkVersion", "FrameworkVersion64", "INCLUDE",
+            "LIB", "LIBPATH", "NETFXSDKDir", "Path", "Platform", "UCRTVersion",
+            "UniversalCRTSdkDir", "VCIDEInstallDir", "VCINSTALLDIR", "VCToolsInstallDir",
+            "VCToolsRedistDir", "VCToolsVersion", "VisualStudioVersion", "VSINSTALLDIR",
+            "WindowsLibPath", "WindowsSdkBinPath", "WindowsSdkDir", "WindowsSDKLibVersion",
+            "WindowsSdkVerBinPath", "WindowsSDKVersion"
+          )
+          foreach ($line in $envLines) {
+            $parts = $line -split "=", 2
+            if ($parts.Count -eq 2 -and $exportNames -contains $parts[0]) {
+              "$($parts[0])=$($parts[1])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            }
+          }
       - name: Probe MSVC resource and response-file paths
         shell: pwsh
-        run: scripts/probe-windows-runner.ps1 -Arch '${{ matrix.msvcArch }}' -Msys2Root '${{ steps.msys2.outputs.msys2-location }}'
+        run: scripts/probe-windows-runner.ps1 -Msys2Root '${{ steps.msys2.outputs.msys2-location }}'
 
   publish-release:
     name: Publish GitHub Release

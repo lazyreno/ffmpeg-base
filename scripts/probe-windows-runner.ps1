@@ -1,17 +1,6 @@
-param([ValidateSet('x64', 'arm64')][string]$Arch, [string]$Msys2Root)
+param([string]$Msys2Root)
 
 $ErrorActionPreference = 'Stop'
-$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-$component = if ($Arch -eq 'arm64') { 'Microsoft.VisualStudio.Component.VC.Tools.ARM64' } else { 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' }
-$vsInstall = & $vswhere -latest -products * -requires $component -property installationPath
-$vcvars = Join-Path $vsInstall 'VC\Auxiliary\Build\vcvarsall.bat'
-$envLines = cmd /s /c "`"$vcvars`" $Arch && set"
-foreach ($line in $envLines) {
-    $parts = $line -split '=', 2
-    if ($parts.Count -eq 2 -and $parts[0] -match '^[A-Za-z_][A-Za-z_0-9]*$') {
-        [Environment]::SetEnvironmentVariable($parts[0], $parts[1], 'Process')
-    }
-}
 $sdkInclude = @($env:INCLUDE -split ';' | Where-Object { $_ -and (Test-Path (Join-Path $_ 'windows.h')) })[0]
 if (-not $sdkInclude) { throw 'Windows SDK windows.h is absent from vcvarsall INCLUDE' }
 $env:PROBE_WINSDK_INCLUDE = $sdkInclude

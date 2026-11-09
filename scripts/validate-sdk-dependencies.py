@@ -69,7 +69,9 @@ def validate_licenses(sdk: Path, installed: Path) -> list[str]:
     for package in (installed / "share").iterdir():
         if not package.is_dir():
             continue
-        if not (package / "copyright").is_file() or not (sdk / "licenses" / package.name / "LICENSE").is_file():
+        if not (package / "copyright").is_file():
+            continue
+        if not (sdk / "licenses" / package.name / "LICENSE").is_file():
             errors.append(f"missing vcpkg copyright for {package.name}")
     return errors
 

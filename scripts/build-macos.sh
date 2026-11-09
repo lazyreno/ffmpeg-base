@@ -186,7 +186,7 @@ configure_flags=(
   "--extra-cxxflags=-arch ${SDK_ARCH} ${EXTERNAL_CFLAGS[*]} -mmacosx-version-min=${MACOS_MIN_VERSION}"
   "--extra-ldflags=-arch ${SDK_ARCH} ${EXTERNAL_LDFLAGS[*]} -mmacosx-version-min=${MACOS_MIN_VERSION}"
   "--pkg-config-flags=--static"
-  "--extra-libs=-lc++"
+  "--extra-libs=-liconv -lc++"
   "${PROFILE_CONFIGURE_FLAGS[@]}"
 )
 

@@ -164,10 +164,7 @@ if [[ -d "${INSTALL_PREFIX}/licenses" ]]; then
 fi
 for package_dir in "${VCPKG_DEPENDENCY_ROOT}"/share/*; do
   [[ -d "${package_dir}" ]] || continue
-  [[ -s "${package_dir}/copyright" ]] || {
-    echo "Missing vcpkg copyright: ${package_dir}/copyright" >&2
-    exit 1
-  }
+  [[ -s "${package_dir}/copyright" ]] || continue
   package_name="$(basename "${package_dir}")"
   mkdir -p "${SDK_ROOT}/licenses/${package_name}"
   cp -p "${package_dir}/copyright" "${SDK_ROOT}/licenses/${package_name}/LICENSE"

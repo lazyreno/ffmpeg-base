@@ -1,4 +1,5 @@
 import importlib.util
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -33,10 +34,43 @@ class DependencyValidatorTest(unittest.TestCase):
         spec.loader.exec_module(module)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            (root / "installed" / "share" / "libjxl").mkdir(parents=True)
+            copyright_file = root / "installed" / "share" / "libjxl" / "copyright"
+            copyright_file.parent.mkdir(parents=True)
+            copyright_file.write_text("libjxl license")
             (root / "sdk" / "licenses").mkdir(parents=True)
             errors = module.validate_licenses(root / "sdk", root / "installed")
             self.assertTrue(any("libjxl" in error for error in errors))
+
+    def test_stage_and_validate_ignore_vcpkg_metadata_directories(self):
+        spec = importlib.util.spec_from_file_location("dependency_validator", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            install = root / "install"
+            vcpkg = root / "vcpkg"
+            sdk = root / "sdk"
+            source.mkdir()
+            (source / "LICENSE.md").write_text("FFmpeg license")
+            for directory in (install / "include", install / "lib", install / "bin"):
+                directory.mkdir(parents=True)
+            for executable in ("ffmpeg.exe", "ffprobe.exe"):
+                (install / "bin" / executable).write_bytes(b"test")
+            copyright_file = vcpkg / "share" / "libjxl" / "copyright"
+            copyright_file.parent.mkdir(parents=True)
+            copyright_file.write_text("libjxl license")
+            for metadata in ("hwy", "iconv", "libiconv"):
+                (vcpkg / "share" / metadata).mkdir()
+            result = subprocess.run(
+                ["bash", str(ROOT / "scripts/stage-sdk.sh"), "--source", str(source),
+                 "--prefix", str(install), "--output", str(sdk), "--platform", "windows",
+                 "--arch", "x86_64", "--vcpkg-root", str(vcpkg)],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertEqual("libjxl license", (sdk / "licenses" / "libjxl" / "LICENSE").read_text())
+            self.assertEqual([], module.validate_licenses(sdk, vcpkg))
 
 
 if __name__ == "__main__":
