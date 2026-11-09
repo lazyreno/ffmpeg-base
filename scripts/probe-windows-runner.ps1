@@ -88,7 +88,7 @@ $probePath = Join-Path $env:GITHUB_WORKSPACE 'ci-probe.sh'
 Set-Content -LiteralPath $probePath -Value $probe -NoNewline -Encoding utf8NoBOM
 & $bash --login $probePath
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& msys2 -c 'printf "MSYS2_SHELL=%s MAKE=%s RC=%s\n" "$(command -v bash)" "$(command -v make)" "$(command -v rc.exe)"; printf "MSYS2_INCLUDE=%s\n" "$INCLUDE"'
+& msys2 -c 'command -v bash; command -v make; command -v rc.exe; env | grep "^INCLUDE="'
 if ($LASTEXITCODE -ne 0) { throw 'MSYS2 runner toolchain lookup failed' }
 Remove-Item -Force (Join-Path $env:GITHUB_WORKSPACE 'ci-probe-make.res') -ErrorAction SilentlyContinue
 & msys2 -c 'make -f ci-probe.mk all'
@@ -116,5 +116,10 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host 'FFMPEG_REAL_RESOURCE_FAILED'
     Get-Content (Join-Path $sourceDir 'ci-configure.log') -Tail 30
 }
-& msys2 -c "cd '$sourceMsys2' && make V=1 libavdevice/avdeviceres.o"
+& msys2 -c "cd '$sourceMsys2' && rm -f libavdevice/avdeviceres.o && make V=1 libavdevice/avdeviceres.o"
 if ($LASTEXITCODE -eq 0) { Write-Host 'FFMPEG_MSYS2_RESOURCE_OK' } else { Write-Host 'FFMPEG_MSYS2_RESOURCE_FAILED' }
+$msysBash = Join-Path $env:MSYS2_LOCATION 'usr\bin\bash.exe'
+if (Test-Path $msysBash) {
+    & $msysBash --login -c "cd '$sourceMsys2' && rm -f libavdevice/avdeviceres.o && make V=1 libavdevice/avdeviceres.o"
+    if ($LASTEXITCODE -eq 0) { Write-Host 'FFMPEG_DIRECT_MSYS2_RESOURCE_OK' } else { Write-Host 'FFMPEG_DIRECT_MSYS2_RESOURCE_FAILED' }
+}
