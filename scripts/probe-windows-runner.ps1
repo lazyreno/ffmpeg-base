@@ -81,3 +81,25 @@ $probePath = Join-Path $env:GITHUB_WORKSPACE 'ci-probe.sh'
 Set-Content -LiteralPath $probePath -Value $probe -NoNewline -Encoding utf8NoBOM
 & $bash --login $probePath
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+$lock = Get-Content (Join-Path $env:GITHUB_WORKSPACE 'config/source-lock.json') -Raw | ConvertFrom-Json
+$sourceArchive = Join-Path $env:RUNNER_TEMP 'ffmpeg-source-probe.tar.gz'
+Invoke-WebRequest -Uri $lock.url -OutFile $sourceArchive -MaximumRetryCount 3 -RetryIntervalSec 5
+if ((Get-FileHash $sourceArchive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $lock.sha256) {
+    throw 'Pinned FFmpeg source hash mismatch in Windows probe'
+}
+$sourceParent = Join-Path $env:RUNNER_TEMP 'ffmpeg-source-probe'
+New-Item -ItemType Directory -Force $sourceParent | Out-Null
+tar -xzf $sourceArchive -C $sourceParent
+if ($LASTEXITCODE -ne 0) { throw 'Pinned FFmpeg source extraction failed in Windows probe' }
+$sourceDir = Join-Path $sourceParent "FFmpeg-$($lock.tag)"
+$sourceMsys = (& $bash --login -c "cygpath -u '$sourceDir'").Trim()
+$targetArch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'aarch64' } else { 'x86_64' }
+$asmFlag = if ($targetArch -eq 'aarch64') { '--disable-asm' } else { '' }
+& $bash --login -c "cd '$sourceMsys' && ./configure --toolchain=msvc --cc=clang-cl --target-os=win64 --arch=$targetArch $asmFlag --disable-autodetect --disable-everything --enable-avdevice --enable-indev=dshow --enable-indev=gdigrab --enable-shared --disable-static --disable-doc --disable-programs > ci-configure.log 2>&1 && make V=1 libavdevice/avdeviceres.o"
+if ($LASTEXITCODE -eq 0) {
+    Write-Host 'FFMPEG_REAL_RESOURCE_OK'
+} else {
+    Write-Host 'FFMPEG_REAL_RESOURCE_FAILED'
+    Get-Content (Join-Path $sourceDir 'ci-configure.log') -Tail 30
+}
