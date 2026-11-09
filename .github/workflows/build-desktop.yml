@@ -2,6 +2,11 @@ name: Build Desktop FFmpeg SDK
 
 on:
   workflow_dispatch:
+    inputs:
+      environment_probe:
+        description: Inspect the Windows runner toolchain without building the SDK
+        type: boolean
+        default: false
   pull_request:
     branches:
       - main
@@ -69,6 +74,7 @@ jobs:
   build-sdk:
     name: ${{ matrix.key }} SDK
     needs: prepare-matrix
+    if: ${{ !inputs.environment_probe }}
     runs-on: ${{ matrix.runner }}
     env:
       VCPKG_DOWNLOADS: ${{ github.workspace }}/.vcpkg-root/downloads
@@ -362,6 +368,30 @@ jobs:
           archive: false
           if-no-files-found: error
           retention-days: 14
+
+  probe-windows-environment:
+    name: Probe ${{ matrix.arch }} Windows toolchain
+    if: ${{ inputs.environment_probe }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: windows-2022, msvcArch: x64 }
+          - { arch: arm64, runner: windows-11-arm, msvcArch: arm64 }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          path-type: inherit
+          update: false
+          cache: false
+          release: false
+      - name: Probe MSVC resource and response-file paths
+        shell: pwsh
+        run: scripts/probe-windows-runner.ps1 -Arch '${{ matrix.msvcArch }}'
 
   publish-release:
     name: Publish GitHub Release

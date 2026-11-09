@@ -43,7 +43,7 @@ class CloudBuildMatrixTest(unittest.TestCase):
 
     def test_build_prepares_pinned_tools_and_macos_autotools(self):
         workflow = (ROOT / ".github/workflows/build-desktop.yml").read_text()
-        self.assertEqual(1, workflow.count("release: false"))
+        self.assertEqual(2, workflow.count("release: false"))
         self.assertEqual(1, workflow.count("scripts/bootstrap-pinned-vcpkg-macos.sh"))
         self.assertEqual(1, workflow.count("scripts/bootstrap-pinned-vcpkg-windows.py"))
         self.assertEqual(1, workflow.count("& $env:FFMPEG_NASM -v"))
