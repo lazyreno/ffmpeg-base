@@ -361,17 +361,11 @@ fi
 
 $ConfigureScriptPath = Join-Path $BuildToolsDir "run-ffmpeg-build.sh"
 Set-Content -LiteralPath $ConfigureScriptPath -Value $configureCommand -NoNewline -Encoding utf8NoBOM
-bash --login "$ConfigureScriptPath"
+& msys2 -c "bash '$MsysBuildToolsDir/run-ffmpeg-build.sh'"
 if ($LASTEXITCODE -ne 0) {
     throw "FFmpeg Windows MSVC build failed"
 }
-bash "$MsysRootDir/scripts/stage-sdk.sh" `
-    --source "$MsysSourceDir" `
-    --prefix "$MsysInstallPrefix" `
-    --output "$MsysSdkRoot" `
-    --platform windows `
-    --arch "$SdkArch" `
-    --vcpkg-root "$MsysVcpkgDependencyRoot"
+& msys2 -c "bash '$MsysRootDir/scripts/stage-sdk.sh' --source '$MsysSourceDir' --prefix '$MsysInstallPrefix' --output '$MsysSdkRoot' --platform windows --arch '$SdkArch' --vcpkg-root '$MsysVcpkgDependencyRoot'"
 if ($LASTEXITCODE -ne 0) {
     throw "Windows SDK staging failed"
 }

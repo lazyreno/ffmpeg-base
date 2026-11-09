@@ -97,6 +97,11 @@ $probePath = Join-Path $env:GITHUB_WORKSPACE 'ci-probe.sh'
 Set-Content -LiteralPath $probePath -Value $probe -NoNewline -Encoding utf8NoBOM
 & $bash --login $probePath
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$probeMsys = (& msys2 -c "cygpath -u '$probePath'").Trim()
+& msys2 -c "bash '$probeMsys'"
+if ($LASTEXITCODE -ne 0) { throw 'The production MSYS2 script launcher failed' }
+Write-Host 'MSYS2_SCRIPT_LAUNCHER_OK'
+exit 0
 & msys2 -c 'command -v bash; command -v make; command -v rc.exe; env | grep "^INCLUDE="'
 if ($LASTEXITCODE -ne 0) { throw 'MSYS2 runner toolchain lookup failed' }
 Remove-Item -Force (Join-Path $env:GITHUB_WORKSPACE 'ci-probe-make.res') -ErrorAction SilentlyContinue

@@ -55,7 +55,8 @@ class WindowsRuntimeMatrixTest(unittest.TestCase):
 
         self.assertIn("$ConfigureScriptPath", script)
         self.assertIn("Set-Content -LiteralPath $ConfigureScriptPath", script)
-        self.assertIn('bash --login "$ConfigureScriptPath"', script)
+        self.assertIn('& msys2 -c "bash ', script)
+        self.assertNotIn('bash --login', script)
         self.assertNotIn("bash -lc $configureCommand", script)
 
 
