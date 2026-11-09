@@ -15,6 +15,7 @@ set -u
 cd "$(cygpath -u "$GITHUB_WORKSPACE")"
 printf 'MSYS pwd=%s\n' "$(pwd -W)"
 printf 'MSYS INCLUDE=%s\n' "${INCLUDE:-missing}"
+printf 'make=%s\n' "$(command -v make || true)"
 printf '#include <windows.h>\n1 RCDATA BEGIN 0 END\n' > ci-probe.rc
 if rc.exe -nologo -fo ci-probe.res ci-probe.rc; then echo RC_DEFAULT_OK; else echo RC_DEFAULT_FAILED; fi
 if rc.exe -nologo -i"$PROBE_WINSDK_INCLUDE" -fo ci-probe-explicit.res ci-probe.rc; then echo RC_EXPLICIT_OK; else echo RC_EXPLICIT_FAILED; fi
@@ -62,6 +63,19 @@ if bash -c "echo $objects > libavcodec/avcodec-make.dll.objs" && test -s libavco
 else
   echo RESPONSE_MAKE_STYLE_FAILED
 fi
+printf 'OBJS :=' > ci-probe.mk
+for i in $(seq 1 2500); do printf ' libavcodec/ci-probe.o' >> ci-probe.mk; done
+cat >> ci-probe.mk <<'EOF'
+
+.PHONY: all
+all: ci-probe-make.res libavcodec/avcodec-make2.dll.objs
+ci-probe-make.res: ci-probe.rc
+	./ci-mswindres -I. -I./ -o $@ $<
+libavcodec/avcodec-make2.dll.objs:
+	@echo $(OBJS) > $@
+EOF
+if make -f ci-probe.mk all; then echo MAKE_RECIPES_OK; else echo MAKE_RECIPES_FAILED; fi
+if test -s libavcodec/avcodec-make2.dll.objs; then echo MAKE_RESPONSE_EXISTS; else echo MAKE_RESPONSE_MISSING; fi
 '@
 $probePath = Join-Path $env:GITHUB_WORKSPACE 'ci-probe.sh'
 Set-Content -LiteralPath $probePath -Value $probe -NoNewline -Encoding utf8NoBOM
