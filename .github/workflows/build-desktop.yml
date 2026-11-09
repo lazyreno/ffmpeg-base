@@ -420,7 +420,7 @@ jobs:
           }
       - name: Probe MSVC resource and response-file paths
         shell: pwsh
-        run: scripts/probe-windows-runner.ps1 -Msys2Root '${{ steps.msys2.outputs.msys2-location }}'
+        run: scripts/probe-windows-runner.ps1
 
   publish-release:
     name: Publish GitHub Release

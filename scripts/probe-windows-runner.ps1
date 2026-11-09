@@ -1,5 +1,3 @@
-param([string]$Msys2Root)
-
 $ErrorActionPreference = 'Stop'
 $sdkInclude = @($env:INCLUDE -split ';' | Where-Object { $_ -and (Test-Path (Join-Path $_ 'windows.h')) })[0]
 if (-not $sdkInclude) { throw 'Windows SDK windows.h is absent from vcvarsall INCLUDE' }
@@ -9,8 +7,7 @@ Write-Host "MSVC=$env:VCToolsVersion WindowsSDK=$env:WindowsSDKVersion"
 Write-Host "Windows SDK include=$sdkInclude"
 Write-Host "rc.exe=$((Get-Command rc.exe).Source)"
 Write-Host "link.exe=$((Get-Command link.exe).Source)"
-$bash = Join-Path $Msys2Root 'usr\bin\bash.exe'
-if (!(Test-Path $bash)) { throw "MSYS2 bash missing: $bash" }
+$bash = (Get-Command bash.exe -ErrorAction Stop).Source
 Write-Host "bash=$bash"
 
 $probe = @'
