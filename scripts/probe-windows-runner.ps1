@@ -88,6 +88,11 @@ $probePath = Join-Path $env:GITHUB_WORKSPACE 'ci-probe.sh'
 Set-Content -LiteralPath $probePath -Value $probe -NoNewline -Encoding utf8NoBOM
 & $bash --login $probePath
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& msys2 -c 'printf "MSYS2_SHELL=%s MAKE=%s RC=%s\n" "$(command -v bash)" "$(command -v make)" "$(command -v rc.exe)"; printf "MSYS2_INCLUDE=%s\n" "$INCLUDE"'
+if ($LASTEXITCODE -ne 0) { throw 'MSYS2 runner toolchain lookup failed' }
+Remove-Item -Force (Join-Path $env:GITHUB_WORKSPACE 'ci-probe-make.res') -ErrorAction SilentlyContinue
+& msys2 -c 'make -f ci-probe.mk all'
+if ($LASTEXITCODE -eq 0) { Write-Host 'MSYS2_MAKE_RECIPES_OK' } else { Write-Host 'MSYS2_MAKE_RECIPES_FAILED' }
 
 $lock = Get-Content (Join-Path $env:GITHUB_WORKSPACE 'config/source-lock.json') -Raw | ConvertFrom-Json
 $sourceArchive = Join-Path $env:RUNNER_TEMP 'ffmpeg-source-probe.tar.gz'
@@ -101,6 +106,7 @@ tar -xzf $sourceArchive -C $sourceParent
 if ($LASTEXITCODE -ne 0) { throw 'Pinned FFmpeg source extraction failed in Windows probe' }
 $sourceDir = Join-Path $sourceParent "FFmpeg-$($lock.tag)"
 $sourceMsys = (& $bash --login -c "cygpath -u '$sourceDir'").Trim()
+$sourceMsys2 = (& msys2 -c "cygpath -u '$sourceDir'").Trim()
 $targetArch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'aarch64' } else { 'x86_64' }
 $asmFlag = '--disable-asm'
 & $bash --login -c "cd '$sourceMsys' && ./configure --toolchain=msvc --cc=clang-cl --target-os=win64 --arch=$targetArch $asmFlag --disable-autodetect --disable-everything --enable-avdevice --enable-indev=dshow --enable-indev=gdigrab --enable-shared --disable-static --disable-doc --disable-programs > ci-configure.log 2>&1 && make V=1 libavdevice/avdeviceres.o"
@@ -110,3 +116,5 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host 'FFMPEG_REAL_RESOURCE_FAILED'
     Get-Content (Join-Path $sourceDir 'ci-configure.log') -Tail 30
 }
+& msys2 -c "cd '$sourceMsys2' && make V=1 libavdevice/avdeviceres.o"
+if ($LASTEXITCODE -eq 0) { Write-Host 'FFMPEG_MSYS2_RESOURCE_OK' } else { Write-Host 'FFMPEG_MSYS2_RESOURCE_FAILED' }
