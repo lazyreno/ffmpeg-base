@@ -76,6 +76,13 @@ libavcodec/avcodec-make2.dll.objs:
 EOF
 if make -f ci-probe.mk all; then echo MAKE_RECIPES_OK; else echo MAKE_RECIPES_FAILED; fi
 if test -s libavcodec/avcodec-make2.dll.objs; then echo MAKE_RESPONSE_EXISTS; else echo MAKE_RESPONSE_MISSING; fi
+cat >> ci-probe.mk <<'EOF'
+.PHONY: file
+file:
+	$(file >libavcodec/avcodec-make3.dll.objs,$(OBJS))
+	@test -s libavcodec/avcodec-make3.dll.objs
+EOF
+if make -f ci-probe.mk file; then echo MAKE_FILE_FUNCTION_OK; else echo MAKE_FILE_FUNCTION_FAILED; fi
 '@
 $probePath = Join-Path $env:GITHUB_WORKSPACE 'ci-probe.sh'
 Set-Content -LiteralPath $probePath -Value $probe -NoNewline -Encoding utf8NoBOM
@@ -95,7 +102,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Pinned FFmpeg source extraction failed in Wind
 $sourceDir = Join-Path $sourceParent "FFmpeg-$($lock.tag)"
 $sourceMsys = (& $bash --login -c "cygpath -u '$sourceDir'").Trim()
 $targetArch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'aarch64' } else { 'x86_64' }
-$asmFlag = if ($targetArch -eq 'aarch64') { '--disable-asm' } else { '' }
+$asmFlag = '--disable-asm'
 & $bash --login -c "cd '$sourceMsys' && ./configure --toolchain=msvc --cc=clang-cl --target-os=win64 --arch=$targetArch $asmFlag --disable-autodetect --disable-everything --enable-avdevice --enable-indev=dshow --enable-indev=gdigrab --enable-shared --disable-static --disable-doc --disable-programs > ci-configure.log 2>&1 && make V=1 libavdevice/avdeviceres.o"
 if ($LASTEXITCODE -eq 0) {
     Write-Host 'FFMPEG_REAL_RESOURCE_OK'
