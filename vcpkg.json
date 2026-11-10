@@ -1,6 +1,6 @@
 {
   "name": "ffmpeg-base-sdk-deps",
-  "version-string": "20261108.1",
+  "version-string": "20261110.1",
   "dependencies": [
     "mp3lame",
     "libvpx",

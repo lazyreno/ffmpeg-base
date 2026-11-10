@@ -72,5 +72,5 @@ Testing/
 __pycache__/
 *.py[cod]
 
-# Local agent planning documents
-docs/superpowers/
+# Local documents
+/docs/

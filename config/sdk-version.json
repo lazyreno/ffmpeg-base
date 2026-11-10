@@ -1,8 +1,8 @@
 {
-  "sdkVersion": "20261108.1",
+  "sdkVersion": "20261110.1",
   "ffmpegVersion": "8.1.2",
   "releaseChannel": "stable",
   "licenseMode": "gpl",
-  "featureProfile": "gpl-desktop-media-v2",
+  "featureProfile": "gpl-desktop-media",
   "vcpkgBaseline": "1b31135aadd41bfd2c9e76d06b5f815e54a0adea"
 }

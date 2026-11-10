@@ -14,7 +14,7 @@ SDK_VERSION = REPO_ROOT / "config" / "sdk-version.json"
 
 
 class GenerateArtifactIndexTest(unittest.TestCase):
-    def test_generator_emits_schema_v2_minimum_version_without_artifact_profile(self):
+    def test_generator_emits_schema_minimum_version_without_artifact_profile(self):
         platforms = json.loads(PLATFORM_MATRIX.read_text(encoding="utf-8"))["platforms"]
         sdk = json.loads(SDK_VERSION.read_text(encoding="utf-8"))
 

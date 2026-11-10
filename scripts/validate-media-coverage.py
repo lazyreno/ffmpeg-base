@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise representative v2 input, processing, and output commands."""
+"""Exercise representative SDK input, processing, and output commands."""
 
 import argparse
 import subprocess
@@ -22,7 +22,7 @@ def main() -> int:
     args = parser.parse_args()
     ffmpeg = str(args.ffmpeg.resolve())
     ffprobe = str(args.ffprobe.resolve())
-    with tempfile.TemporaryDirectory(prefix="ffmpeg-sdk-v2-") as temp:
+    with tempfile.TemporaryDirectory(prefix="ffmpeg-sdk-") as temp:
         work = Path(temp)
         video = [ffmpeg, "-hide_banner", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=64x64:rate=1", "-frames:v", "1"]
         audio = [ffmpeg, "-hide_banner", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=16000", "-t", "0.2"]

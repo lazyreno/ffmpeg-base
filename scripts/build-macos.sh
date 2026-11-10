@@ -113,7 +113,7 @@ dependency_prefix() {
     value="${VCPKG_DEPENDENCY_ROOT}"
   fi
   if [[ -z "${value}" || ! -f "${value}/${header}" || ! -d "${value}/lib" ]]; then
-    echo "${package_name} headers and libraries are required for the v2 SDK profile." >&2
+    echo "${package_name} headers and libraries are required for the configured SDK profile." >&2
     echo "Run vcpkg install --triplet ${VCPKG_TRIPLET}, or set ${env_name} to a prefix containing ${header} and lib/." >&2
     exit 1
   fi

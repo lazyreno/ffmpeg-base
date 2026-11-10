@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check release ZIP contents against the v2 platform declarations."""
+"""Check release ZIP contents against the platform declarations."""
 
 import argparse
 import json
@@ -39,6 +39,13 @@ def validate_archive(archive: Path, platform: dict, sdk: dict) -> list[str]:
                     errors.append(f"{archive.name}: manifest {key} mismatch")
             if components.get("featureProfile") != sdk["featureProfile"] or components.get("platform") != platform["key"]:
                 errors.append(f"{archive.name}: component profile or platform mismatch")
+            if platform["os"] == "macos":
+                for tool in ("ffmpeg", "ffprobe"):
+                    path = f"{root}/bin/{tool}"
+                    if path not in members or package.getinfo(path).is_dir():
+                        errors.append(f"{archive.name}: missing macOS {tool}")
+                    elif not (package.getinfo(path).external_attr >> 16) & 0o100:
+                        errors.append(f"{archive.name}: macOS {tool} is not executable")
             for name in FFMPEG_LIBRARIES:
                 lib_name = f"lib{name}.dylib" if platform["os"] == "macos" else f"{name}.lib"
                 if f"{root}/lib/{lib_name}" not in members:

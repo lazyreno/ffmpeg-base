@@ -9,22 +9,18 @@ $NativeArm64Host = [System.Runtime.InteropServices.RuntimeInformation]::OSArchit
 if ($SdkArch -eq "arm64" -and !$NativeArm64Host) {
     throw "Windows ARM64 SDK validation requires a native ARM64 runner"
 }
+$FfmpegTargetCflags = ""
 switch ($SdkArch) {
     "x86_64" {
         $FfmpegArch = "x86_64"
         $FfmpegCrossCompileFlag = ""
-        $FfmpegTargetCflags = "-D_WIN32_WINNT=0x0601 -DWINVER=0x0601 -DNTDDI_VERSION=0x06010000"
-        $FfmpegTargetLdflags = "/SUBSYSTEM:CONSOLE,6.01"
         $FfmpegAssemblyFlag = ""
-        $VcpkgTriplet = "x64-windows"
     }
     "arm64" {
         $FfmpegArch = "aarch64"
         $FfmpegCrossCompileFlag = ""
         $FfmpegTargetCflags = "--target=arm64-windows"
-        $FfmpegTargetLdflags = ""
         $FfmpegAssemblyFlag = "--disable-asm"
-        $VcpkgTriplet = "arm64-windows"
     }
     default {
         throw "Unsupported Windows SDK architecture: $SdkArch"
@@ -41,6 +37,14 @@ $MinimumSystemVersion = $PlatformDeclaration[0].minimumSystemVersion
 if ([string]::IsNullOrWhiteSpace($MinimumSystemVersion)) {
     throw "$PlatformKey must declare non-empty minimumSystemVersion"
 }
+$VcpkgTriplet = $PlatformDeclaration[0].triplet
+if ([string]::IsNullOrWhiteSpace($VcpkgTriplet)) {
+    throw "$PlatformKey must declare non-empty triplet"
+}
+$MinimumVersion = [Version]$MinimumSystemVersion
+$WindowsVersionHex = "0x{0:X2}{1:X2}" -f $MinimumVersion.Major, $MinimumVersion.Minor
+$FfmpegTargetCflags = "$FfmpegTargetCflags -D_WIN32_WINNT=$WindowsVersionHex -DWINVER=$WindowsVersionHex -DNTDDI_VERSION=${WindowsVersionHex}0000".Trim()
+$FfmpegTargetLdflags = "/SUBSYSTEM:CONSOLE,$('{0}.{1:D2}' -f $MinimumVersion.Major, $MinimumVersion.Minor)"
 $BuildRoot = if ($env:BUILD_ROOT) { $env:BUILD_ROOT } else { Join-Path $RootDir "build/$PlatformKey" }
 
 $SdkConfig = Get-Content "config/sdk-version.json" -Raw | ConvertFrom-Json
@@ -107,11 +111,11 @@ $RequiredVcpkgDependencyHeaders = @(
 )
 foreach ($RequiredHeader in $RequiredVcpkgDependencyHeaders) {
     if (!(Test-Path (Join-Path $VcpkgDependencyRoot $RequiredHeader))) {
-        throw "$RequiredHeader from $VcpkgTriplet must be installed with vcpkg before building the v2 SDK profile"
+        throw "$RequiredHeader from $VcpkgTriplet must be installed with vcpkg before building the configured SDK profile"
     }
 }
 if (!(Test-Path (Join-Path $VcpkgDependencyRoot "lib"))) {
-    throw "vcpkg lib directory for $VcpkgTriplet is required before building the v2 SDK profile"
+    throw "vcpkg lib directory for $VcpkgTriplet is required before building the configured SDK profile"
 }
 $VpxImportLib = Join-Path $VcpkgDependencyRoot "lib/vpx.lib"
 if (!(Test-Path $VpxImportLib)) {

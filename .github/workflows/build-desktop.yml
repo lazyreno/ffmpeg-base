@@ -264,10 +264,10 @@ jobs:
           path: ${{ github.workspace }}/.vcpkg-binary-cache
           key: vcpkg-${{ matrix.key }}-${{ steps.runner-image.outputs.version }}-${{ needs.prepare-matrix.outputs.vcpkg_commit }}-${{ hashFiles('vcpkg.json', 'ports/**') }}
 
-      - name: Install macOS v2 dependencies
+      - name: Install macOS SDK dependencies
         if: matrix.buildFamily == 'macos'
         env:
-          MACOSX_DEPLOYMENT_TARGET: "11.0"
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.minimumSystemVersion }}
           VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-binary-cache,readwrite
           X_VCPKG_ASSET_SOURCES: x-script,python3 ${{ github.workspace }}/scripts/fetch-vcpkg-github-asset.py {url} {sha512} {dst}
           GH_TOKEN: ${{ github.token }}
@@ -285,7 +285,7 @@ jobs:
             --x-install-root "${{ github.workspace }}/.vcpkg-installed" \
             --clean-after-build
 
-      - name: Install Windows v2 dependencies
+      - name: Install Windows SDK dependencies
         if: matrix.buildFamily == 'windows-msvc'
         shell: pwsh
         env:
@@ -326,7 +326,7 @@ jobs:
           SDK_ARCH: ${{ matrix.arch }}
           VCPKG_ROOT: ${{ github.workspace }}/.vcpkg-root
           VCPKG_INSTALLED_DIR: ${{ github.workspace }}/.vcpkg-installed
-          MACOSX_DEPLOYMENT_TARGET: "11.0"
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.minimumSystemVersion }}
         run: scripts/build-macos.sh
 
       - name: Build Windows SDK

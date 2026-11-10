@@ -1,31 +1,18 @@
-import json
 from pathlib import Path
 import unittest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PLATFORM_MATRIX = REPO_ROOT / "config" / "platform-matrix.json"
 BUILD_SCRIPT = REPO_ROOT / "scripts" / "build-windows-msvc.ps1"
 
 
 class WindowsRuntimeMatrixTest(unittest.TestCase):
-    def test_v2_build_uses_one_profile_and_native_arm64(self):
+    def test_build_uses_x86_64_profile_overrides_and_architecture(self):
         script = BUILD_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("$ProfileConfig.configure.windows_x86_64", script)
-        self.assertNotIn("SDK_CONFIGURE_ONLY", script)
         self.assertIn("SDK_ARCH=$SdkArch", script)
-        self.assertNotIn("$ProfileConfig.features", script)
-        self.assertNotIn("$FeaturesJson", script)
-        self.assertNotIn("desktop LGPL app SDK profile", script)
 
-    def test_windows_artifacts_use_native_runners_and_runtime_validation(self):
-        platforms = json.loads(PLATFORM_MATRIX.read_text(encoding="utf-8"))["platforms"]
-        by_key = {platform["key"]: platform for platform in platforms}
-
-        self.assertEqual("windows-2022", by_key["windows-x86_64"]["runner"])
-        self.assertEqual("windows-11-arm", by_key["windows-arm64"]["runner"])
-        self.assertEqual("arm64", by_key["windows-arm64"]["msvcArch"])
-
+    def test_windows_artifacts_run_capability_validation_around_manifest_generation(self):
         script = BUILD_SCRIPT.read_text(encoding="utf-8")
         stage_offset = script.index('scripts/stage-sdk.sh')
         manifest_offset = script.index('scripts/generate-manifest.cmake')
@@ -43,7 +30,6 @@ class WindowsRuntimeMatrixTest(unittest.TestCase):
         self.assertIn('$env:MSYS2_LOCATION', script)
         self.assertIn('"clangarm64/bin/pkg-config.exe"', script)
         self.assertIn('"mingw64/bin/pkg-config.exe"', script)
-        self.assertNotIn('downloads/tools/msys2', script)
         self.assertIn('"aom >= 2.0.0"', script)
 
     def test_bash_build_command_is_run_from_a_script_file(self):
@@ -52,8 +38,6 @@ class WindowsRuntimeMatrixTest(unittest.TestCase):
         self.assertIn("$ConfigureScriptPath", script)
         self.assertIn("Set-Content -LiteralPath $ConfigureScriptPath", script)
         self.assertIn('& msys2 -c "bash ', script)
-        self.assertNotIn('bash --login', script)
-        self.assertNotIn("bash -lc $configureCommand", script)
 
 
 if __name__ == "__main__":

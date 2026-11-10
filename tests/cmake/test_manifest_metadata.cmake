@@ -20,7 +20,7 @@ execute_process(
         -D "VCPKG_TRIPLET=arm64-osx"
         -D "FFMPEG_SOURCE_URL=https://example.invalid/ffmpeg.tar.xz"
         -D "FFMPEG_SOURCE_SHA256=1111111111111111111111111111111111111111111111111111111111111111"
-        -D "FEATURE_PROFILE=gpl-desktop-media-v2"
+        -D "FEATURE_PROFILE=gpl-desktop-media"
         -D "SDK_EXTERNAL_DEPENDENCIES_JSON=[\"zlib\"]"
         -D "LICENSE_MODE=gpl"
         -D "MINIMUM_SYSTEM_VERSION=11.0"
@@ -47,8 +47,8 @@ if(NOT minimum_version STREQUAL "11.0")
     message(FATAL_ERROR "Manifest must preserve minimum system version")
 endif()
 string(JSON feature_profile GET "${manifest_json}" featureProfile)
-if(NOT feature_profile STREQUAL "gpl-desktop-media-v2")
-    message(FATAL_ERROR "Manifest must use the v2 feature profile")
+if(NOT feature_profile STREQUAL "gpl-desktop-media")
+    message(FATAL_ERROR "Manifest must use the configured feature profile")
 endif()
 string(JSON legacy_features ERROR_VARIABLE features_error GET "${manifest_json}" features)
 if(features_error STREQUAL "NOTFOUND")

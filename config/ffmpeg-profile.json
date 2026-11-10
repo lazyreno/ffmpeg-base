@@ -1,5 +1,5 @@
 {
-  "profile": "gpl-desktop-media-v2",
+  "profile": "gpl-desktop-media",
   "licenseMode": "gpl",
   "externalDependencies": [
     "zlib",
