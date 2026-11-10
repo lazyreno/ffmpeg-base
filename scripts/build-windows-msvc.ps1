@@ -92,7 +92,6 @@ $LibAliasDir = Join-Path $BuildRoot "lib-alias"
 $VcpkgRoot = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } elseif ($env:VCPKG_INSTALLATION_ROOT) { $env:VCPKG_INSTALLATION_ROOT } else { "C:\vcpkg" }
 $VcpkgInstalledDir = if ($env:VCPKG_INSTALLED_DIR) { $env:VCPKG_INSTALLED_DIR } else { Join-Path $VcpkgRoot "installed" }
 $VcpkgDependencyRoot = Join-Path $VcpkgInstalledDir $VcpkgTriplet
-$VcpkgMsysToolsRoot = Join-Path $VcpkgRoot "downloads/tools/msys2"
 
 $RequiredVcpkgDependencyHeaders = @(
     "include/lame/lame.h",
@@ -211,27 +210,14 @@ $WindowsSdkUcrtLibraryFlag = "/libpath:$WindowsSdkLibraryLinkForMsvc/ucrt/$Windo
 $WindowsSdkUmLibraryFlag = "/libpath:$WindowsSdkLibraryLinkForMsvc/um/$WindowsSdkLibraryArch"
 $MsvcLibraryFlag = "/libpath:$MsvcLibraryLinkForMsvc"
 
-if (!(Test-Path $VcpkgMsysToolsRoot)) {
-    throw "vcpkg MSYS2 tools directory is required for pkg-config: $VcpkgMsysToolsRoot"
+if ([string]::IsNullOrWhiteSpace($env:MSYS2_LOCATION)) {
+    throw "MSYS2_LOCATION is required for pkg-config"
 }
-$PkgConfigCandidates = @(Get-ChildItem -Path $VcpkgMsysToolsRoot -Recurse -File |
-    Where-Object { $_.Name -in @("pkg-config.exe", "pkgconf.exe") } |
-    Where-Object {
-        if ($SdkArch -eq "arm64") {
-            return $_.FullName -match "\\(clangarm64|usr)\\bin\\"
-        }
-        return $_.FullName -match "\\(mingw64|usr)\\bin\\"
-    } |
-    Sort-Object {
-        if ($SdkArch -eq "arm64" -and $_.FullName -match "\\clangarm64\\bin\\(pkg-config|pkgconf)\.exe$") { 0 }
-        elseif ($_.FullName -match "\\mingw64\\bin\\(pkg-config|pkgconf)\.exe$") { 0 }
-        elseif ($_.FullName -match "\\usr\\bin\\pkg-config\.exe$") { 1 }
-        else { 2 }
-    }, FullName)
-if ($PkgConfigCandidates.Count -eq 0) {
-    throw "No vcpkg-provided pkg-config executable found under $VcpkgMsysToolsRoot"
+$PkgConfigRelativePath = if ($SdkArch -eq "arm64") { "clangarm64/bin/pkg-config.exe" } else { "mingw64/bin/pkg-config.exe" }
+$PkgConfigExe = Join-Path $env:MSYS2_LOCATION $PkgConfigRelativePath
+if (!(Test-Path $PkgConfigExe)) {
+    throw "MSYS2 pkg-config is required for ${PlatformKey}: $PkgConfigExe"
 }
-$PkgConfigExe = $PkgConfigCandidates[0].FullName
 
 New-Item -ItemType Directory -Force (Join-Path $BuildRoot "downloads") | Out-Null
 New-Item -ItemType Directory -Force (Join-Path $BuildRoot "src") | Out-Null
@@ -329,17 +315,17 @@ if [[ -n '$MsysNasmDir' ]]; then
 fi
 echo "pkgconf: `$(command -v pkgconf || true)"
 echo "pkg-config: `$(command -v pkg-config || true)"
-echo "vcpkg pkg-config: $MsysPkgConfigExe"
+echo "MSYS2 pkg-config: $MsysPkgConfigExe"
 echo "wslpath: `$(command -v wslpath)"
 '$MsysPkgConfigExe' --version
 if ! '$MsysPkgConfigExe' --exists "vpx >= 1.4.0"; then
-  echo "vcpkg pkg-config cannot locate the required vpx >= 1.4.0 package" >&2
+  echo "MSYS2 pkg-config cannot locate the required vpx >= 1.4.0 package" >&2
   exit 1
 fi
 echo "vpx cflags: `$('$MsysPkgConfigExe' --cflags vpx)"
 echo "vpx libs: `$('$MsysPkgConfigExe' --libs vpx)"
 if ! '$MsysPkgConfigExe' --exists "aom >= 2.0.0"; then
-  echo "vcpkg pkg-config cannot locate the required aom >= 2.0.0 package" >&2
+  echo "MSYS2 pkg-config cannot locate the required aom >= 2.0.0 package" >&2
   exit 1
 fi
 cd '$MsysSourceDir'

@@ -37,18 +37,14 @@ class WindowsRuntimeMatrixTest(unittest.TestCase):
         self.assertLess(first_validator_call, manifest_offset)
         self.assertGreater(second_validator_call, manifest_offset)
 
-    def test_arm64_build_uses_architecture_matched_pkg_config_for_aom(self):
+    def test_build_uses_architecture_matched_msys2_pkg_config_for_aom(self):
         script = BUILD_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn(
-            'return $_.FullName -match "\\\\(clangarm64|usr)\\\\bin\\\\"',
-            script,
-        )
+        self.assertIn('$env:MSYS2_LOCATION', script)
+        self.assertIn('"clangarm64/bin/pkg-config.exe"', script)
+        self.assertIn('"mingw64/bin/pkg-config.exe"', script)
+        self.assertNotIn('downloads/tools/msys2', script)
         self.assertIn('"aom >= 2.0.0"', script)
-        self.assertIn(
-            '$SdkArch -eq "arm64" -and $_.FullName -match "\\\\clangarm64\\\\bin\\\\(pkg-config|pkgconf)\\.exe$"',
-            script,
-        )
 
     def test_bash_build_command_is_run_from_a_script_file(self):
         script = BUILD_SCRIPT.read_text(encoding="utf-8")

@@ -70,6 +70,12 @@ class CloudBuildMatrixTest(unittest.TestCase):
         self.assertIn('path: ${{ github.workspace }}/${{ steps.sdk-artifact.outputs.name }}.tar', workflow)
         self.assertNotIn('"${RUNNER_TEMP}/${SDK_ARTIFACT_NAME}.tar"', workflow)
 
+    def test_windows_pkg_config_is_installed_independently_of_vcpkg_cache(self):
+        workflow = (ROOT / ".github/workflows/build-desktop.yml").read_text()
+        self.assertIn("mingw-w64-clang-aarch64-pkgconf", workflow)
+        self.assertIn("mingw-w64-x86_64-pkgconf", workflow)
+        self.assertIn("MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

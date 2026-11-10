@@ -118,6 +118,7 @@ jobs:
             diffutils
             make
             nasm
+            ${{ matrix.arch == 'arm64' && 'mingw-w64-clang-aarch64-pkgconf' || 'mingw-w64-x86_64-pkgconf' }}
 
       - name: Setup MSVC
         if: matrix.buildFamily == 'windows-msvc'
@@ -333,6 +334,7 @@ jobs:
         shell: pwsh
         env:
           SDK_ARCH: ${{ matrix.arch }}
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
           VCPKG_ROOT: ${{ github.workspace }}\.vcpkg-root
           VCPKG_INSTALLED_DIR: ${{ github.workspace }}/.vcpkg-installed
         run: scripts/build-windows-msvc.ps1
