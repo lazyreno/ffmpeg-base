@@ -366,7 +366,6 @@ jobs:
       - name: Upload SDK transfer archive
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.sdk-artifact.outputs.name }}-stage
           path: ${{ github.workspace }}/${{ steps.sdk-artifact.outputs.name }}.tar
           archive: false
           if-no-files-found: error
@@ -387,21 +386,17 @@ jobs:
       - name: Download SDK directories
         uses: actions/download-artifact@v8
         with:
-          pattern: ffmpeg-sdk-*-stage
+          pattern: ffmpeg-sdk-*.tar
           path: staged-transfer
+          merge-multiple: true
 
       - name: Archive SDKs
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p staged-sdks release-assets
-          for transfer_dir in staged-transfer/*; do
-            [[ -d "${transfer_dir}" ]] || continue
-            transfer_archive="$(find "${transfer_dir}" -maxdepth 1 -type f -name 'ffmpeg-sdk-*.tar' -print -quit)"
-            [[ -n "${transfer_archive}" ]] || {
-              echo "Downloaded SDK transfer archive is missing: ${transfer_dir}" >&2
-              exit 1
-            }
+          for transfer_archive in staged-transfer/*.tar; do
+            [[ -f "${transfer_archive}" ]] || continue
             tar -xf "${transfer_archive}" -C staged-sdks
           done
           for sdk_dir in staged-sdks/*; do
